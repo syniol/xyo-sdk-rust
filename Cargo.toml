@@ -7,8 +7,6 @@ authors = [
     "Hadi Tajallaei <hadi@syniol.com"
 ]
 license = "Apache-2.0"
-license-file = "LICENSE"
 
 [dependencies]
-http-request = "8.91.14"
 
