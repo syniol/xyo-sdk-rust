@@ -28,5 +28,5 @@ pub trait Enrichment {
 }
 
 pub fn health() -> bool {
-    return true
+    return true;
 }

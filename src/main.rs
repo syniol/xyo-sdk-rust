@@ -1,10 +1,12 @@
-use crate::enrichment::enrichment::EnrichmentRequest;
-
 mod enrichment;
 mod client;
 
+use crate::enrichment::enrichment::EnrichmentRequest;
+use crate::enrichment::service::new_request;
+
 fn main() {
-    let sss = EnrichmentRequest{
+    new_request();
+    let sss = EnrichmentRequest {
         content: "Syniol Limited".to_string(),
         country_code: "GB".to_string(),
     };
