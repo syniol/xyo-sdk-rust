@@ -4,7 +4,7 @@ description = "XYO Financial Official SDK for Rust"
 version = "0.1.0"
 edition = "2021"
 authors = [
-    "Hadi Tajallaei <hadi@syniol.com"
+    "Hadi Tajallaei <hadi@syniol.com>"
 ]
 license = "Apache-2.0"
 

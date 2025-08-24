@@ -7,5 +7,3 @@ COPY . /var/local/xyo-sdk/
 WORKDIR /var/local/xyo-sdk
 
 RUN cargo test
-
-
