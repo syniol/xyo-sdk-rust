@@ -3,4 +3,4 @@ build:
 
 
 ssh:
-	docker run -it --rm -v $(PWD):/var/local/xyo-sdk xyo-sdk-rust:latest sh
+	docker run --name xyo_sdk_rust -it --rm -v $(PWD):/var/local/xyo-sdk xyo-sdk-rust:latest sh
