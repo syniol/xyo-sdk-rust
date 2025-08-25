@@ -11,3 +11,5 @@ RUN cargo test
 # Testing imported SDK and instantion
 WORKDIR /var/local/xyo-sdk/example
 RUN cargo run || exit 1
+
+WORKDIR /var/local/xyo-sdk
