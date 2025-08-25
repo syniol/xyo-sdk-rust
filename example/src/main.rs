@@ -1,9 +1,9 @@
-use xyo_sdk::enrichment::enrichment::EnrichmentRequest;
+use xyo_sdk::enrichment::EnrichmentRequest;
 
 fn main() {
-    let zzz: EnrichmentRequest = EnrichmentRequest{
-        content: "".to_string(),
-        country_code: "".to_string(),
+    let _: EnrichmentRequest = EnrichmentRequest{
+        content: "Syniol AI Payment Enrichment Software".to_string(),
+        country_code: "GB".to_string(),
     };
 
     println!("Successfully imported XYO SDK and created enrichment request");

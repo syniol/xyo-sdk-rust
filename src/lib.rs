@@ -1,5 +1,6 @@
-pub mod enrichment;
+pub mod config;
 pub mod client;
+pub mod enrichment;
 
 // use crate::enrichment::enrichment::EnrichmentRequest;
 // use crate::enrichment::service::new_request;
