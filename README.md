@@ -10,7 +10,7 @@ This is an official SDK for XYO Financial in Rust Language.
 ## Quickstart Guide
 
 ```rust
-use xyo_sdk::client::new_client;
+use xyo_sdk::client::{new_client, ClientConfig};
 use xyo_sdk::enrichment::EnrichmentRequest;
 
 fn main() {
