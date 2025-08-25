@@ -1,5 +1,5 @@
 build:
-	docker build . -t xyo-sdk-rust:latest
+	docker build . -t xyo-sdk-rust:latest --no-cache
 
 
 ssh:
