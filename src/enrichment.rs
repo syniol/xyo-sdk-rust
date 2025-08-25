@@ -4,15 +4,15 @@ pub struct EnrichmentRequest {
 }
 
 pub struct EnrichmentResponse {
-    merchant: String,
-    description: String,
-    categories: Vec<String>,
-    logo: String,
+    pub merchant: String,
+    pub description: String,
+    pub categories: Vec<String>,
+    pub logo: String,
 }
 
 pub struct EnrichmentCollectionResponse {
-    id: String,
-    link: String,
+    pub id: String,
+    pub link: String,
 }
 
 pub enum EnrichmentTransactionCollectionStatus {
@@ -22,7 +22,7 @@ pub enum EnrichmentTransactionCollectionStatus {
 }
 
 pub trait Enrichment {
-    fn enrich_transaction(rq: EnrichmentRequest) -> EnrichmentResponse;
+    fn enrich_transaction(rq: &EnrichmentRequest) -> EnrichmentResponse;
     fn enrich_transaction_collection(rq: &Vec<EnrichmentRequest>) -> EnrichmentCollectionResponse;
     fn enrich_transaction_collection_status(id: String) -> EnrichmentTransactionCollectionStatus;
 }
