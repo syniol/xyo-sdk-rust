@@ -16,8 +16,6 @@ pub struct Client {
     http_client: i32,
 }
 
-
-
 impl Enrichment for Client {
     fn enrich_transaction(&self, rq: &EnrichmentRequest) -> EnrichmentResponse {
         todo!()
