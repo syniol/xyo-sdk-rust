@@ -1,3 +1,4 @@
+workspace = { members = ["xyo-http"] }
 [package]
 name = "xyo-sdk"
 description = "XYO Financial Official SDK for Rust"

@@ -13,7 +13,7 @@ pub struct ClientConfig {
 pub struct Client {
     pub config: ClientConfig,
     // todo: find an appropriate package for http request since rust std library has none!
-    http_client: i32,
+    http_client: fn(method: &str, path: &str, data: usize) -> String,
 }
 
 impl Enrichment for Client {
@@ -31,8 +31,12 @@ impl Enrichment for Client {
 }
 
 pub fn new(config: ClientConfig) -> Client {
+    fn sss(method: &str, path: &str, data: usize) -> String {
+        return format!("https://{}{}", method, path);
+    }
+
     Client{
         config,
-        http_client: 0,
+        http_client: sss,
     }
 }
