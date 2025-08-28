@@ -24,5 +24,5 @@ pub enum EnrichmentTransactionCollectionStatus {
 pub trait Enrichment {
     fn enrich_transaction(&self, rq: &EnrichmentRequest) -> EnrichmentResponse;
     fn enrich_transaction_collection(&self, rq: Vec<&EnrichmentRequest>) -> EnrichmentCollectionResponse;
-    fn enrich_transaction_collection_status(&self, id: String) -> EnrichmentTransactionCollectionStatus;
+    fn enrich_transaction_collection_status(&self, id: &str) -> EnrichmentTransactionCollectionStatus;
 }

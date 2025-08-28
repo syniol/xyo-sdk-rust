@@ -1,3 +1,6 @@
+use std::string;
+use xyo_http::{request, HttpMethod};
+
 use crate::enrichment::{
     Enrichment,
     EnrichmentCollectionResponse,
@@ -12,31 +15,44 @@ pub struct ClientConfig {
 
 pub struct Client {
     pub config: ClientConfig,
-    // todo: find an appropriate package for http request since rust std library has none!
-    http_client: fn(method: &str, path: &str, data: usize) -> String,
+    pub http_client: fn(method: HttpMethod, path: &str, data: &str) -> String,
 }
 
 impl Enrichment for Client {
     fn enrich_transaction(&self, rq: &EnrichmentRequest) -> EnrichmentResponse {
-        todo!()
+        let resp = (&self.http_client)(HttpMethod::POST, "/api/v1/transaction", "");
+
+        EnrichmentResponse{
+            merchant: String::from(""),
+            description: String::from(""),
+            categories: vec![String::from("")],
+            logo: String::from(""),
+        }
     }
 
     fn enrich_transaction_collection(&self, rq: Vec<&EnrichmentRequest>) -> EnrichmentCollectionResponse {
-        todo!()
+        let resp = (&self.http_client)(HttpMethod::POST, "/api/v1/transactions", "");
+
+        EnrichmentCollectionResponse{
+            id: String::from(""),
+            link: String::from(""),
+        }
     }
 
-    fn enrich_transaction_collection_status(&self, id: String) -> EnrichmentTransactionCollectionStatus {
-        todo!()
+    fn enrich_transaction_collection_status(&self, id: &str) -> EnrichmentTransactionCollectionStatus {
+        let resp = (&self.http_client)(
+            HttpMethod::GET,
+            format!("/api/v1/transactions/status/{}", id).as_str(),
+            "",
+        );
+
+        EnrichmentTransactionCollectionStatus::Failed
     }
 }
 
 pub fn new(config: ClientConfig) -> Client {
-    fn sss(method: &str, path: &str, data: usize) -> String {
-        return format!("https://{}{}", method, path);
-    }
-
     Client{
         config,
-        http_client: sss,
+        http_client: request,
     }
 }

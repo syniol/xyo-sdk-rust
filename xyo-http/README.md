@@ -26,5 +26,9 @@ Content-Length: 48
 ```
 
 
+#### Links
+ * [curl to HTTP 1.1 Spec Converter](https://curlconverter.com/http/)
+
+
 #### Credits
 Copyright &copy; Syniol Limited. All rights reserved.
