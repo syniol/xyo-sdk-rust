@@ -5,6 +5,8 @@ RUN apk add --update-cache \
     ca-certificates \
     openssl
 
+RUN rustup component add rustfmt
+
 RUN mkdir -p /var/local/xyo-sdk
 
 COPY . /var/local/xyo-sdk/
