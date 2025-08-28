@@ -13,6 +13,10 @@ COPY . /var/local/xyo-sdk/
 WORKDIR /var/local/xyo-sdk
 RUN cargo test --verbose
 
+# Running Tests for XYO-HTTP Workspace dependency
+WORKDIR /var/local/xyo-sdk/xyo-http
+RUN cargo test --verbose
+
 # Testing imported SDK and instantion
 WORKDIR /var/local/xyo-sdk/example
 RUN cargo run || exit 1

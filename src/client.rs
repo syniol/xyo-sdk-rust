@@ -94,3 +94,40 @@ pub fn new(config: ClientConfig) -> Client {
         http_client: request,
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_works_when_enrich_transaction_has_ok_status_code() {
+        use xyo_http::{HttpMethod};
+
+        fn mocked_request_call(_: HttpMethod, _: &str, _: &str) -> String {
+            let mocked_enrichment_response: EnrichmentResponse = EnrichmentResponse{
+                merchant: String::from("Syniol Limited"),
+                description: String::from("Software and Platform Consultancy"),
+                categories: vec![String::from("Software")],
+                logo: String::from("base64/png-dsadsadasdasdasdasdsa"),
+            };
+
+            String::from(format!(
+                "HTTP/1.1 200 OK\r\nServer: nginx/1.22.1\r\nContent-Type: application/json\r\n\n{}",
+                serde_json::to_string(&mocked_enrichment_response).unwrap(),
+            ))
+        }
+
+        let client = Client{
+            http_client: mocked_request_call,
+            config: ClientConfig{api_key: "".to_string()},
+        };
+
+        let resp = client.enrich_transaction(&EnrichmentRequest{
+            content: String::from("Syniol Tech"),
+            country_code: String::from("GB"),
+        });
+
+        println!("{}", resp.unwrap().logo);
+    }
+}

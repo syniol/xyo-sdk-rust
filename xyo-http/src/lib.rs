@@ -94,10 +94,10 @@ mod tests {
     fn it_works_with_body_content() {
         let result = request(HttpMethod::GET, "/healthz", "{\"status\": \"something\"}");
         let response_body = get_body_from_request_response(result.clone());
-        let status_code = get_status_code(result);
+        let status_code = get_status_code(result.clone());
 
         println!("status_code: {}", status_code);
-        println!("{}", response_body);
+        println!("{}", result);
 
         assert_eq!(status_code, 200);
         assert_eq!(response_body.contains("\"healthy\":true"), true);
