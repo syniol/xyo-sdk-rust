@@ -1,4 +1,4 @@
-name: Publish package
+name: Publish Crates Package
 
 on:
   push:
@@ -13,8 +13,8 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
-      # Setup .npmrc file to publish to GitHub Packages
       - run: |
           cargo publish
+          cd xyo-http;cargo publish;cd..;
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
