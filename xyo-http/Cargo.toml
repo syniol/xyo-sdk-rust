@@ -1,4 +1,16 @@
 [package]
 name = "xyo-http"
+description = "http client used for XYO Financial SDK"
 version = "0.1.0"
 edition = "2021"
+authors = [
+    "Hadi Tajallaei <hadi@syniol.com>"
+]
+repository = "https://github.com/syniol/xyo-sdk-rust"
+homepage = "https://xyo.financial"
+categories = ["finance"]
+license = "Apache-2.0"
+readme = "README.md"
+exclude = [
+    ".idea",
+]
