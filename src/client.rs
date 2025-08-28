@@ -95,17 +95,16 @@ pub fn new(config: ClientConfig) -> Client {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn it_works_when_enrich_transaction_has_ok_status_code() {
-        use xyo_http::{HttpMethod};
+        use xyo_http::HttpMethod;
 
         fn mocked_request_call(_: HttpMethod, _: &str, _: &str) -> String {
-            let mocked_enrichment_response: EnrichmentResponse = EnrichmentResponse{
+            let mocked_enrichment_response: EnrichmentResponse = EnrichmentResponse {
                 merchant: String::from("Syniol Limited"),
                 description: String::from("Software and Platform Consultancy"),
                 categories: vec![String::from("Software")],
@@ -118,12 +117,14 @@ mod tests {
             ))
         }
 
-        let client = Client{
+        let client = Client {
             http_client: mocked_request_call,
-            config: ClientConfig{api_key: "".to_string()},
+            config: ClientConfig {
+                api_key: "".to_string(),
+            },
         };
 
-        let resp = client.enrich_transaction(&EnrichmentRequest{
+        let resp = client.enrich_transaction(&EnrichmentRequest {
             content: String::from("Syniol Tech"),
             country_code: String::from("GB"),
         });
