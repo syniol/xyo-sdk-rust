@@ -13,6 +13,7 @@ categories = ["finance"]
 license = "Apache-2.0"
 readme = "README.md"
 exclude = [
+    ".idea",
     ".gitignore",
     ".github",
     "Dockerfile",
