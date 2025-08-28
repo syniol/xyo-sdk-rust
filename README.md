@@ -8,16 +8,20 @@ This is an official SDK for XYO Financial in Rust Language.
 
 
 ## Quickstart Guide
+Client is an entry point to consume the enrichment services.
 
 ```rust
-use xyo_sdk::client::{new_client, ClientConfig};
+use xyo_sdk::client::{new, ClientConfig};
 use xyo_sdk::enrichment::EnrichmentRequest;
 
 fn main() {
-    let client = new_client(ClientConfig{api_key: ""});
-    let result = client.enrich_transaction(EnrichmentRequest{
-        content: "Syniol Tech".to_string(),
-        country_code: "GB".to_string(),
+    let client = new(ClientConfig {
+        api_key: "YourAPIKeyFromXYO.FinancialDashboard"
+    });
+
+    let result = client.enrich_transaction(&EnrichmentRequest{
+        content: String::from("Syniol Tech"),
+        country_code: String::from("GB"),
     });
 
     println!("Merchant Name: {}", result.merchant);

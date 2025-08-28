@@ -1,4 +1,4 @@
-workspace = { members = ["xyo-http"] }
+workspace = { members = ["xyo-http"], exclude = ["example"] }
 [package]
 name = "xyo-sdk"
 description = "XYO Financial Official SDK for Rust"
