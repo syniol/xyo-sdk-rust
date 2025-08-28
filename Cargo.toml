@@ -2,7 +2,7 @@ workspace = { members = ["xyo-http"], exclude = ["example"] }
 [package]
 name = "xyo-sdk"
 description = "XYO Financial Official SDK for Rust"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = [
     "Hadi Tajallaei <hadi@syniol.com>"
