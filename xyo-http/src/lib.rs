@@ -61,9 +61,9 @@ pub fn request(method: HttpMethod, path: &str, data: &str) -> String {
 pub fn get_body_from_request_response(result: String) -> String {
     let response_vector = result.split("\r\n").collect::<Vec<&str>>();
 
-    String::from(remove_whitespace(
+    String::from(
         response_vector[response_vector.len() - 1],
-    ))
+    )
 }
 
 /// It will get the first line of response header: HTTP 200 OK and splits by space
@@ -76,7 +76,8 @@ pub fn get_status_code(result: String) -> i16 {
     status_code
 }
 
-fn remove_whitespace(s: &str) -> String {
+/// Hold-off
+fn _remove_whitespace(s: &str) -> String {
     s.split_whitespace().collect()
 }
 

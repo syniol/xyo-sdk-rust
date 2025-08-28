@@ -103,13 +103,21 @@ mod tests {
     fn it_works_when_enrich_transaction_has_ok_status_code() {
         use xyo_http::HttpMethod;
 
-        fn mocked_request_call(_: HttpMethod, _: &str, _: &str) -> String {
+        fn mocked_request_call(method: HttpMethod, path: &str, request_data: &str) -> String {
+            let mocked_enrichment_request = &EnrichmentRequest {
+                content: String::from("Syniol Tech"),
+                country_code: String::from("GB"),
+            };
             let mocked_enrichment_response: EnrichmentResponse = EnrichmentResponse {
                 merchant: String::from("Syniol Limited"),
                 description: String::from("Software and Platform Consultancy"),
                 categories: vec![String::from("Software")],
                 logo: String::from("base64/png-dsadsadasdasdasdasdsa"),
             };
+
+            assert_eq!(format!("{:?}", method), format!("{:?}", HttpMethod::POST));
+            assert_eq!(path, "/api/v1/transaction");
+            assert_eq!(request_data, serde_json::to_string(mocked_enrichment_request).unwrap());
 
             String::from(format!(
                 "HTTP/1.1 200 OK\r\nServer: nginx/1.22.1\r\nContent-Type: application/json\r\n\n{}",
@@ -120,7 +128,7 @@ mod tests {
         let client = Client {
             http_client: mocked_request_call,
             config: ClientConfig {
-                api_key: "".to_string(),
+                api_key: "MyAPIKeyFromDashboardXYO.Financial".to_string(),
             },
         };
 
@@ -129,6 +137,6 @@ mod tests {
             country_code: String::from("GB"),
         });
 
-        println!("{}", resp.unwrap().logo);
+        assert_eq!("Syniol Limited", resp.unwrap().merchant);
     }
 }
