@@ -1,8 +1,9 @@
 use xyo_sdk::client;
-use xyo_sdk::enrichment::{Enrichment, EnrichmentRequest};
+// use xyo_sdk::enrichment::Enrichment;
+// use xyo_sdk::enrichment::{Enrichment, EnrichmentRequest};
 
 fn main() {
-    let client = client::new(client::ClientConfig {
+    let _ = client::new(client::ClientConfig {
         api_key: String::from("YourAPIKeyFromXYO.FinancialDashboard"),
     });
 
@@ -11,5 +12,5 @@ fn main() {
     //     country_code: String::from("GB"),
     // });
     //
-    // println!("Successfully imported XYO SDK and created enrichment request");
+    println!("Successfully imported XYO SDK");
 }

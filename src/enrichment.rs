@@ -1,3 +1,4 @@
+use crate::error::ClientError;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
@@ -34,13 +35,16 @@ pub struct EnrichmentTransactionCollectionStatusResponse {
 }
 
 pub trait Enrichment {
-    fn enrich_transaction(&self, rq: &EnrichmentRequest) -> EnrichmentResponse;
+    fn enrich_transaction(&self, rq: &EnrichmentRequest)
+        -> Result<EnrichmentResponse, ClientError>;
+
     fn enrich_transaction_collection(
         &self,
         rq: Vec<&EnrichmentRequest>,
-    ) -> EnrichmentCollectionResponse;
+    ) -> Result<EnrichmentCollectionResponse, ClientError>;
+
     fn enrich_transaction_collection_status(
         &self,
         id: &str,
-    ) -> EnrichmentTransactionCollectionStatus;
+    ) -> Result<EnrichmentTransactionCollectionStatus, ClientError>;
 }

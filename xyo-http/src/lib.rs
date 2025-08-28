@@ -57,6 +57,7 @@ pub fn request(method: HttpMethod, path: &str, data: &str) -> String {
     format!("{}", a)
 }
 
+/// It will get the last line of response with split after: \r\n
 pub fn get_body_from_request_response(result: String) -> String {
     let response_vector = result.split("\r\n").collect::<Vec<&str>>();
 
