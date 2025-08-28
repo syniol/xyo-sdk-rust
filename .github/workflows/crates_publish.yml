@@ -1,15 +1,15 @@
 name: Publish Crates Package
 
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
 #on:
 #  push:
-#    tags:
-#      - '*'
+#    branches: [ "main" ]
+#  pull_request:
+#    branches: [ "main" ]
+
+on:
+  push:
+    tags:
+      - '*'
 
 jobs:
   build:
