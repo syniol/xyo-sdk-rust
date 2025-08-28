@@ -2,8 +2,6 @@ use std::fmt::Debug;
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpStream};
 use std::time::Duration;
-use serde::{Deserialize, Serialize};
-
 
 #[derive(Debug)]
 pub enum HttpMethod {
@@ -13,7 +11,7 @@ pub enum HttpMethod {
 
 const HOST: &str = "api.xyo.financial";
 const PORT: i32 = 80;
-const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_millis(50);
+const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_millis(100);
 
 mod http_message {
     use crate::{HttpMethod, HOST};
@@ -28,18 +26,20 @@ mod http_message {
                 HOST,
                 data.len(),
                 data,
-            )
+            );
         }
 
-        format!("{:?} {} HTTP/1.1\r\nHost: {}\r\nAccept: application/json\r\n\n",method, path, HOST)
+        format!(
+            "{:?} {} HTTP/1.1\r\nHost: {}\r\nAccept: application/json\r\n\n",
+            method, path, HOST
+        )
     }
 }
-
 
 /// It will send an HTTP request to XYO API
 /// method: HttpMethod only accepts POST and GET at the moment
 /// path: Starts with `/` e.g. /api/v1/enrichment
-/// data: Body is bytes
+/// data: Body is string literal e.g. `"{\"key\":\"value\"}"`
 pub fn request(method: HttpMethod, path: &str, data: &str) -> String {
     let Ok(mut tcp_stream_socket) = TcpStream::connect(format!("{}:{}", HOST, PORT)) else {
         todo!()
@@ -60,7 +60,19 @@ pub fn request(method: HttpMethod, path: &str, data: &str) -> String {
 pub fn get_body_from_request_response(result: String) -> String {
     let response_vector = result.split("\r\n").collect::<Vec<&str>>();
 
-    String::from(remove_whitespace(response_vector[response_vector.len() - 1]))
+    String::from(remove_whitespace(
+        response_vector[response_vector.len() - 1],
+    ))
+}
+
+/// It will get the first line of response header: HTTP 200 OK and splits by space
+/// Final output is an integer 16 byte size
+pub fn get_status_code(result: String) -> i16 {
+    let response_vector = result.split("\r\n").collect::<Vec<&str>>();
+    let status_code_str = response_vector[0].split(" ").collect::<Vec<&str>>()[1];
+    let status_code: i16 = status_code_str.trim().parse().unwrap();
+
+    status_code
 }
 
 fn remove_whitespace(s: &str) -> String {
@@ -80,16 +92,13 @@ mod tests {
     #[test]
     fn it_works_with_body_content() {
         let result = request(HttpMethod::GET, "/healthz", "{\"status\": \"something\"}");
-        let response_body = get_body_from_request_response(result);
+        let response_body = get_body_from_request_response(result.clone());
+        let status_code = get_status_code(result);
 
-        #[derive(Serialize, Deserialize, Debug)]
-        struct HealthCheck {
-            healthy: bool,
-        }
-        let p: HealthCheck = serde_json::from_str(response_body.as_str()).expect("REASON");
-
+        println!("status_code: {}", status_code);
         println!("{}", response_body);
-        assert_eq!(p.healthy, true);
+
+        assert_eq!(status_code, 200);
         assert_eq!(response_body.contains("\"healthy\":true"), true);
     }
 }
