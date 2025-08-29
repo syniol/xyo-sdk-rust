@@ -19,7 +19,8 @@ exclude = [
     "Dockerfile",
     "LICENSE",
     "Makefile",
-    "example/*"
+    "example/*",
+    "docs/*"
 ]
 
 [dependencies]
