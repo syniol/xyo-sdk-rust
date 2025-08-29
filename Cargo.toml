@@ -2,7 +2,7 @@ workspace = { members = ["xyo-http"], exclude = ["example"] }
 [package]
 name = "xyo-sdk"
 description = "XYO Financial Official SDK for Rust"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 authors = [
     "Hadi Tajallaei <hadi@syniol.com>"
@@ -24,4 +24,4 @@ exclude = [
 [dependencies]
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.143"
-xyo-http = { version = "0.1.0", path = "xyo-http" }
+xyo-http = { version = "0.2.3", path = "xyo-http" }
