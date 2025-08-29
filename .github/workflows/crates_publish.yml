@@ -1,19 +1,25 @@
-name: Publish Package
+name: Publish XYO SDK Package
 
 on:
-  push:
-    tags:
-      - '*'
+  workflow_run:
+    workflows: [Publish XYO HTTP Package]
+    types: [completed]
 
 jobs:
-  build:
+  on-success:
     runs-on: ubuntu-latest
     permissions:
       contents: write
       packages: write
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       - uses: actions/checkout@v4
       - run: |
           cargo publish
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+  on-failure:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    steps:
+      - run: echo 'The triggering workflow failed'
