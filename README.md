@@ -2,14 +2,14 @@
 ![workflow](https://github.com/syniol/xyo-sdk-rust/actions/workflows/makefile.yml/badge.svg)    ![workflow](https://github.com/syniol/xyo-sdk-rust/actions/workflows/crates_xyo_http_publish.yml/badge.svg)    ![workflow](https://github.com/syniol/xyo-sdk-rust/actions/workflows/crates_publish.yml/badge.svg)
 
 <p align="center">
-    <a href="https://xyo.financial" target="blank"><img alt="crab mascot" width="50%" src="https://github.com/syniol/xyo-sdk-rust/blob/main/docs/mascot.png?raw=true" /></a>
+    <a href="https://xyo.financial" target="blank"><img alt="Rust Crab Mascot" width="50%" src="https://github.com/syniol/xyo-sdk-rust/blob/main/docs/mascot.png?raw=true" /></a>
 </p>
 
 This is an official SDK for XYO Financial in Rust Language.
 
 
 ## Quickstart Guide
-Client is an entry point to consume the enrichment services.
+Client is an entry point to use the SDK. You need a valid API Key obtainable from https://xyo.financial/dashboard
 
 ```rust
 use xyo_sdk::client::{new, ClientConfig};
