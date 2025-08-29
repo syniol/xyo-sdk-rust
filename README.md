@@ -1,6 +1,8 @@
 # XYO Financial SDK for Rust
 ![workflow](https://github.com/syniol/xyo-sdk-rust/actions/workflows/makefile.yml/badge.svg)    ![workflow](https://github.com/syniol/xyo-sdk-rust/actions/workflows/crates_xyo_http_publish.yml/badge.svg)    ![workflow](https://github.com/syniol/xyo-sdk-rust/actions/workflows/crates_publish.yml/badge.svg)
 
+![Mascot](https://github.com/syniol/xyo-sdk-rust/docs/mascot.png)
+
 This is an official SDK for XYO Financial in Rust Language.
 
 
