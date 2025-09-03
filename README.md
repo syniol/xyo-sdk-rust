@@ -12,7 +12,7 @@ Enrichment services.
 
 
 ## Quickstart Guide
-First you need to install the XYO SDK for node.js ecosystem via [Cartes](https://crates.io/crates/xyo-sdk) package management.
+First you need to install the XYO SDK for Rust Foundation ecosystem via [Cartes](https://crates.io/crates/xyo-sdk) package management.
 
 ```shell
 cargo add xyo-sdk
