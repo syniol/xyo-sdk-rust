@@ -28,7 +28,7 @@ impl Enrichment for Client {
         let status_code = get_status_code(resp.clone());
         if status_code != 200 {
             return Err(ClientError {
-                message: String::from("response is not 200"),
+                message: get_body_from_request_response(resp),
                 code: status_code,
             });
         }
@@ -51,7 +51,7 @@ impl Enrichment for Client {
         let status_code = get_status_code(resp.clone());
         if status_code != 200 {
             return Err(ClientError {
-                message: String::from("response is not 200"),
+                message: get_body_from_request_response(resp),
                 code: status_code,
             });
         }
@@ -75,7 +75,7 @@ impl Enrichment for Client {
         let status_code: i16 = get_status_code(resp.clone());
         if status_code != 200 {
             return Err(ClientError {
-                message: String::from("response is not 200"),
+                message: get_body_from_request_response(resp),
                 code: status_code,
             });
         }
@@ -111,8 +111,6 @@ mod tests {
                 logo: String::from("base64/png-dsadsadasdasdasdasdsa"),
             };
 
-
-
             String::from(format!(
                 "HTTP/1.1 200 OK\r\nServer: nginx/1.22.1\r\nContent-Type: application/json\r\n\n{}",
                 serde_json::to_string(&mocked_enrichment_response).unwrap(),
@@ -131,6 +129,42 @@ mod tests {
             country_code: String::from("GB"),
         });
 
-        assert_eq!("Syniol Limited", resp.unwrap().merchant);
+        let actual:EnrichmentResponse = resp.unwrap();
+
+        assert_eq!("Syniol Limited", actual.merchant);
+        assert_eq!("Software and Platform Consultancy", actual.description);
+        assert_eq!(vec![String::from("Software")], actual.categories);
+        assert_eq!("base64/png-dsadsadasdasdasdasdsa", actual.logo);
+    }
+
+    #[test]
+    fn it_errors_when_enrich_transaction_has_not_ok_status_code() {
+        use xyo_http::HttpMethod;
+
+        fn mocked_request_call(_method: HttpMethod, _path: &str, _request_data: &str) -> String {
+            let mocked_enrichment_response_err = "mocked error response";
+
+            String::from(format!(
+                "HTTP/1.1 400 OK\r\nServer: nginx/1.22.1\r\nContent-Type: application/json\r\n{}",
+                mocked_enrichment_response_err,
+            ))
+        }
+
+        let client = Client {
+            http_client: mocked_request_call,
+            config: ClientConfig {
+                api_key: "MyAPIKeyFromDashboardXYO.Financial".to_string(),
+            },
+        };
+
+        let resp = client.enrich_transaction(&EnrichmentRequest {
+            content: String::from("Syniol Tech"),
+            country_code: String::from("GB"),
+        });
+
+        let actual = resp.unwrap_err();
+
+        assert_eq!(actual.message, "mocked error response");
+        assert_eq!(actual.code, 400);
     }
 }

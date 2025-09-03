@@ -24,9 +24,9 @@ pub struct EnrichmentCollectionResponse {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum EnrichmentTransactionCollectionStatus {
-    Failed,
-    Pending,
-    Success,
+    FAILED,
+    PENDING,
+    READY,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
