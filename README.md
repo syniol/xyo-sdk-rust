@@ -25,7 +25,7 @@ use xyo_sdk::client::{new, ClientConfig};
 
 fn main() {
     let client = new(ClientConfig {
-        api_key: "YourAPIKeyFromXYO.FinancialDashboard"
+        api_key: "your-api-key-from:xyo.Financial"
     });
 }
 ```
