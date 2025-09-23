@@ -46,6 +46,7 @@ mod http_message {
 pub fn request(method: HttpMethod, path: &str, data: &str) -> Result<String, HttpClientError> {
     let Ok(mut tcp_stream_socket) = TcpStream::connect(format!("{}:{}", HOST, PORT)) else {
         return Err(HttpClientError{
+            code: 503,
             message: format!("could not connect to host: {} and port number {}", HOST, PORT),
         })
     };

@@ -26,9 +26,10 @@ impl Enrichment for Client {
             serde_json::to_string(rq).unwrap().as_str(),
         );
         if resp.is_err() {
+            let err = resp.err().unwrap();
             return Err(ClientError{
-                code: 0,
-                message: resp.err().unwrap().message,
+                code: err.code,
+                message: err.message,
             })
         }
 
@@ -57,9 +58,10 @@ impl Enrichment for Client {
             serde_json::to_string(&rq).unwrap().as_str(),
         );
         if resp.is_err() {
+            let err = resp.err().unwrap();
             return Err(ClientError{
-                code: 0,
-                message: resp.err().unwrap().message,
+                code: err.code,
+                message: err.message,
             })
         }
 
@@ -89,9 +91,10 @@ impl Enrichment for Client {
             "",
         );
         if resp.is_err() {
+            let err = resp.err().unwrap();
             return Err(ClientError{
-                code: 0,
-                message: resp.err().unwrap().message,
+                code: err.code,
+                message: err.message,
             })
         }
 
