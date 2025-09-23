@@ -57,7 +57,14 @@ impl Enrichment for Client {
             "/api/v1/transactions",
             serde_json::to_string(&rq).unwrap().as_str(),
         );
-        let result = resp.unwrap();
+        if resp.is_err() {
+            return Err(ClientError{
+                code: 0,
+                message: resp.err().unwrap().message,
+            })
+        }
+
+        let result = resp.ok().unwrap();
 
         let status_code = get_status_code(result.clone());
         if status_code != 200 {
@@ -83,7 +90,14 @@ impl Enrichment for Client {
             format!("/api/v1/transactions/status/{}", id).as_str(),
             "",
         );
-        let result = resp.unwrap();
+        if resp.is_err() {
+            return Err(ClientError{
+                code: 0,
+                message: resp.err().unwrap().message,
+            })
+        }
+
+        let result = resp.ok().unwrap();
         let status_code: i16 = get_status_code(result.clone());
         if status_code != 200 {
             return Err(ClientError {
