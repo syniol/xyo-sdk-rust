@@ -90,18 +90,19 @@ fn _remove_whitespace(s: &str) -> String {
 mod tests {
     use super::*;
 
-    // #[test]
+    #[test]
     fn it_works_without_body_content() {
         let result = request(HttpMethod::GET, "/healthz", "");
-        assert_eq!(result.unwrap().contains("\"healthy\": true"), true);
+        assert_eq!(result.is_err(), false);
+        assert_eq!(result.ok().unwrap().contains("\"healthy\":true"), true);
     }
 
-    // #[test]
+    #[test]
     fn it_works_with_body_content() {
         let resp = request(
             HttpMethod::GET,
             "/healthz",
-            "{\"status\": \"something\"}",
+            "{\"status\":\"something\"}",
         );
 
         let actual = resp.unwrap();

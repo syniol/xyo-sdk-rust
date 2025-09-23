@@ -33,7 +33,6 @@ impl Enrichment for Client {
         }
 
         let result = resp.ok().unwrap();
-
         let status_code = get_status_code(result.clone());
         if status_code != 200 {
             return Err(ClientError {
@@ -65,7 +64,6 @@ impl Enrichment for Client {
         }
 
         let result = resp.ok().unwrap();
-
         let status_code = get_status_code(result.clone());
         if status_code != 200 {
             return Err(ClientError {
