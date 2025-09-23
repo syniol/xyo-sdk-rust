@@ -1,7 +1,10 @@
+mod err;
+
 use std::fmt::Debug;
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpStream};
 use std::time::Duration;
+pub use crate::err::HttpClientError;
 
 #[derive(Debug)]
 pub enum HttpMethod {
@@ -40,21 +43,23 @@ mod http_message {
 /// method: HttpMethod only accepts POST and GET at the moment
 /// path: Starts with `/` e.g. /api/v1/enrichment
 /// data: Body is string literal e.g. `"{\"key\":\"value\"}"`
-pub fn request(method: HttpMethod, path: &str, data: &str) -> String {
+pub fn request(method: HttpMethod, path: &str, data: &str) -> Result<String, HttpClientError> {
     let Ok(mut tcp_stream_socket) = TcpStream::connect(format!("{}:{}", HOST, PORT)) else {
-        todo!()
+        return Err(HttpClientError{
+            message: format!("could not connect to host: {} and port number {}", HOST, PORT),
+        })
     };
 
     // let addr = SocketAddr::from(([185, 185, 127, 12], 80));
     // let Ok(mut socket) = TcpStream::connect_timeout(&addr, Duration::from_millis(100))
     let _ = tcp_stream_socket.set_read_timeout(Some(DEFAULT_TIMEOUT_DURATION));
     let _ = tcp_stream_socket.write(http_message::new(method, path, data).as_bytes());
-    let a: &mut String = &mut String::new();
-    let _ = tcp_stream_socket.read_to_string(a);
+    let resp: &mut String = &mut String::new();
+    let _ = tcp_stream_socket.read_to_string(resp);
     tcp_stream_socket.flush().unwrap();
     tcp_stream_socket.shutdown(Shutdown::Both).unwrap();
 
-    format!("{}", a)
+    Ok(format!("{}", resp))
 }
 
 /// It will get the last line of response with split after: \r\n
@@ -88,17 +93,24 @@ mod tests {
     // #[test]
     fn it_works_without_body_content() {
         let result = request(HttpMethod::GET, "/healthz", "");
-        assert_eq!(result.contains("\"healthy\": true"), true);
+        assert_eq!(result.unwrap().contains("\"healthy\": true"), true);
     }
 
     // #[test]
     fn it_works_with_body_content() {
-        let result = request(HttpMethod::GET, "/healthz", "{\"status\": \"something\"}");
-        let response_body = get_body_from_request_response(result.clone());
-        let status_code = get_status_code(result.clone());
+        let resp = request(
+            HttpMethod::GET,
+            "/healthz",
+            "{\"status\": \"something\"}",
+        );
+
+        let actual = resp.unwrap();
+
+        let response_body = get_body_from_request_response(actual.clone());
+        let status_code = get_status_code(actual.clone());
 
         println!("status_code: {}", status_code);
-        println!("{}", result);
+        println!("{}", actual);
 
         assert_eq!(status_code, 200);
         assert_eq!(response_body.contains("\"healthy\":true"), true);

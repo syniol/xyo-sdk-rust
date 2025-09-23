@@ -1,4 +1,4 @@
-use xyo_http::{get_body_from_request_response, get_status_code, request, HttpMethod};
+use xyo_http::{get_body_from_request_response, get_status_code, request, HttpMethod, HttpClientError};
 
 use crate::enrichment::{
     Enrichment, EnrichmentCollectionResponse, EnrichmentRequest, EnrichmentResponse,
@@ -12,7 +12,7 @@ pub struct ClientConfig {
 
 pub struct Client {
     pub config: ClientConfig,
-    http_client: fn(method: HttpMethod, path: &str, data: &str) -> String,
+    http_client: fn(method: HttpMethod, path: &str, data: &str) -> Result<String, HttpClientError>,
 }
 
 impl Enrichment for Client {
@@ -25,15 +25,24 @@ impl Enrichment for Client {
             "/api/v1/transaction",
             serde_json::to_string(rq).unwrap().as_str(),
         );
-        let status_code = get_status_code(resp.clone());
+        if resp.is_err() {
+            return Err(ClientError{
+                code: 0,
+                message: resp.err().unwrap().message,
+            })
+        }
+
+        let result = resp.ok().unwrap();
+
+        let status_code = get_status_code(result.clone());
         if status_code != 200 {
             return Err(ClientError {
-                message: get_body_from_request_response(resp),
+                message: get_body_from_request_response(result),
                 code: status_code,
             });
         }
 
-        let response_body = get_body_from_request_response(resp);
+        let response_body = get_body_from_request_response(result);
         let result: EnrichmentResponse = serde_json::from_str(response_body.as_str()).unwrap();
 
         Ok(result)
@@ -48,15 +57,17 @@ impl Enrichment for Client {
             "/api/v1/transactions",
             serde_json::to_string(&rq).unwrap().as_str(),
         );
-        let status_code = get_status_code(resp.clone());
+        let result = resp.unwrap();
+
+        let status_code = get_status_code(result.clone());
         if status_code != 200 {
             return Err(ClientError {
-                message: get_body_from_request_response(resp),
+                message: get_body_from_request_response(result),
                 code: status_code,
             });
         }
 
-        let response_body = get_body_from_request_response(resp);
+        let response_body = get_body_from_request_response(result);
         let result: EnrichmentCollectionResponse =
             serde_json::from_str(response_body.as_str()).unwrap();
 
@@ -72,15 +83,16 @@ impl Enrichment for Client {
             format!("/api/v1/transactions/status/{}", id).as_str(),
             "",
         );
-        let status_code: i16 = get_status_code(resp.clone());
+        let result = resp.unwrap();
+        let status_code: i16 = get_status_code(result.clone());
         if status_code != 200 {
             return Err(ClientError {
-                message: get_body_from_request_response(resp),
+                message: get_body_from_request_response(result),
                 code: status_code,
             });
         }
 
-        let response_body = get_body_from_request_response(resp);
+        let response_body = get_body_from_request_response(result);
         let result: EnrichmentTransactionCollectionStatusResponse =
             serde_json::from_str(response_body.as_str()).unwrap();
 
@@ -103,7 +115,7 @@ mod tests {
     fn it_works_when_enrich_transaction_has_ok_status_code() {
         use xyo_http::HttpMethod;
 
-        fn mocked_request_call(_method: HttpMethod, _path: &str, _request_data: &str) -> String {
+        fn mocked_request_call(_method: HttpMethod, _path: &str, _request_data: &str) -> Result<String, HttpClientError> {
             let mocked_enrichment_response: EnrichmentResponse = EnrichmentResponse {
                 merchant: String::from("Syniol Limited"),
                 description: String::from("Software and Platform Consultancy"),
@@ -111,10 +123,10 @@ mod tests {
                 logo: String::from("base64/png-dsadsadasdasdasdasdsa"),
             };
 
-            String::from(format!(
+            Ok(String::from(format!(
                 "HTTP/1.1 200 OK\r\nServer: nginx/1.22.1\r\nContent-Type: application/json\r\n\n{}",
                 serde_json::to_string(&mocked_enrichment_response).unwrap(),
-            ))
+            )))
         }
 
         let client = Client {
@@ -141,13 +153,13 @@ mod tests {
     fn it_errors_when_enrich_transaction_has_not_ok_status_code() {
         use xyo_http::HttpMethod;
 
-        fn mocked_request_call(_method: HttpMethod, _path: &str, _request_data: &str) -> String {
+        fn mocked_request_call(_method: HttpMethod, _path: &str, _request_data: &str) -> Result<String, HttpClientError> {
             let mocked_enrichment_response_err = "mocked error response";
 
-            String::from(format!(
+            Ok(String::from(format!(
                 "HTTP/1.1 400 OK\r\nServer: nginx/1.22.1\r\nContent-Type: application/json\r\n{}",
                 mocked_enrichment_response_err,
-            ))
+            )))
         }
 
         let client = Client {
