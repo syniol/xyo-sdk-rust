@@ -111,7 +111,6 @@ mod tests {
         let status_code = get_status_code(actual.clone());
 
         println!("status_code: {}", status_code);
-        println!("{}", actual);
 
         assert_eq!(status_code, 200);
         assert_eq!(response_body.contains("\"healthy\":true"), true);
