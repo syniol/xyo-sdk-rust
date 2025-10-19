@@ -14,6 +14,8 @@ pub struct EnrichmentResponse {
     pub description: String,
     pub categories: Vec<String>,
     pub logo: String,
+    pub location: Option<String>,
+    pub address: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

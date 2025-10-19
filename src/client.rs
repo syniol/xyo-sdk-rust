@@ -136,6 +136,8 @@ mod tests {
                 description: String::from("Software and Platform Consultancy"),
                 categories: vec![String::from("Software")],
                 logo: String::from("base64/png-dsadsadasdasdasdasdsa"),
+                location: Some(String::from("London, United Kingdom")),
+                address: Some(String::from("")),
             };
 
             Ok(String::from(format!(
@@ -162,6 +164,8 @@ mod tests {
         assert_eq!("Software and Platform Consultancy", actual.description);
         assert_eq!(vec![String::from("Software")], actual.categories);
         assert_eq!("base64/png-dsadsadasdasdasdasdsa", actual.logo);
+        assert_eq!("London, United Kingdom", actual.location.unwrap());
+        assert_eq!("", actual.address.unwrap());
     }
 
     #[test]
