@@ -44,6 +44,8 @@ fn main() {
     println!("Merchant Description: {}", result.description);
     println!("Merchant Categories: {}", result.categories);
     println!("Merchant Logo in embedded base64 encoded: {}", result.logo);
+    println!("Merchant Location (Optional field): {}", result.location);
+    println!("Merchant Address (Optional field): {}", result.address);
 }
 ```
 
