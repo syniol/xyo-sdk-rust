@@ -14,7 +14,7 @@ pub enum HttpMethod {
 
 const HOST: &str = "api.xyo.financial";
 const PORT: i32 = 80;
-const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_millis(100);
+const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(10);
 
 mod http_message {
     use crate::{HttpMethod, HOST};
@@ -23,7 +23,7 @@ mod http_message {
     pub fn new(method: HttpMethod, path: &str, data: &str) -> String {
         if data.len() > 0 {
             return format!(
-                "{:?} {} HTTP/1.1\r\nHost: {}\r\nAccept: application/json\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\n{}",
+                "{:?} {} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nAccept: application/json\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
                 method,
                 path,
                 HOST,
@@ -33,7 +33,7 @@ mod http_message {
         }
 
         format!(
-            "{:?} {} HTTP/1.1\r\nHost: {}\r\nAccept: application/json\r\n\n",
+            "{:?} {} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nAccept: application/json\r\n\r\n",
             method, path, HOST
         )
     }
@@ -44,23 +44,39 @@ mod http_message {
 /// path: Starts with `/` e.g. /api/v1/enrichment
 /// data: Body is string literal e.g. `"{\"key\":\"value\"}"`
 pub fn request(method: HttpMethod, path: &str, data: &str) -> Result<String, HttpClientError> {
-    let Ok(mut tcp_stream_socket) = TcpStream::connect(format!("{}:{}", HOST, PORT)) else {
-        return Err(HttpClientError{
+    let mut tcp_stream_socket = TcpStream::connect(format!("{}:{}", HOST, PORT)).map_err(|e| {
+        HttpClientError {
             code: 503,
-            message: format!("could not connect to host: {} and port number {}", HOST, PORT),
-        })
-    };
+            message: format!("could not connect to host: {} and port number {}: {}", HOST, PORT, e),
+        }
+    })?;
 
-    // let addr = SocketAddr::from(([185, 185, 127, 12], 80));
-    // let Ok(mut socket) = TcpStream::connect_timeout(&addr, Duration::from_millis(100))
-    let _ = tcp_stream_socket.set_read_timeout(Some(DEFAULT_TIMEOUT_DURATION));
-    let _ = tcp_stream_socket.write(http_message::new(method, path, data).as_bytes());
-    let resp: &mut String = &mut String::new();
-    let _ = tcp_stream_socket.read_to_string(resp);
-    tcp_stream_socket.flush().unwrap();
-    tcp_stream_socket.shutdown(Shutdown::Both).unwrap();
+    tcp_stream_socket
+        .set_read_timeout(Some(DEFAULT_TIMEOUT_DURATION))
+        .map_err(|e| HttpClientError {
+            code: 500,
+            message: format!("failed to set read timeout: {}", e),
+        })?;
 
-    Ok(format!("{}", resp))
+    tcp_stream_socket
+        .write_all(http_message::new(method, path, data).as_bytes())
+        .map_err(|e| HttpClientError {
+            code: 500,
+            message: format!("failed to write to socket: {}", e),
+        })?;
+
+    let mut resp = String::new();
+    tcp_stream_socket
+        .read_to_string(&mut resp)
+        .map_err(|e| HttpClientError {
+            code: 500,
+            message: format!("failed to read from socket: {}", e),
+        })?;
+
+    let _ = tcp_stream_socket.flush();
+    let _ = tcp_stream_socket.shutdown(Shutdown::Both);
+
+    Ok(resp)
 }
 
 /// It will get the last line of response with split after: \r\n
