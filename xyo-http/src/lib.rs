@@ -45,7 +45,7 @@ mod http_message {
 /// path: Starts with `/` e.g. /api/v1/enrichment
 /// data: Body is string literal e.g. `"{\"key\":\"value\"}"`
 pub fn request(method: HttpMethod, path: &str, data: &str) -> Result<String, HttpClientError> {
-    let mut tcp_stream_socket = TcpStream::connect(format!("{}:{}", HOST, PORT)).map_err(|e| {
+    let tcp_stream_socket = TcpStream::connect(format!("{}:{}", HOST, PORT)).map_err(|e| {
         HttpClientError {
             code: 503,
             message: format!("could not connect to host: {} and port number {}: {}", HOST, PORT, e),
