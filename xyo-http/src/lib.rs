@@ -2,8 +2,9 @@ mod err;
 
 use std::fmt::Debug;
 use std::io::{Read, Write};
-use std::net::{Shutdown, TcpStream};
+use std::net::TcpStream;
 use std::time::Duration;
+use native_tls::TlsConnector;
 pub use crate::err::HttpClientError;
 
 #[derive(Debug)]
@@ -13,7 +14,7 @@ pub enum HttpMethod {
 }
 
 const HOST: &str = "api.xyo.financial";
-const PORT: i32 = 80;
+const PORT: i32 = 443;
 const DEFAULT_TIMEOUT_DURATION: Duration = Duration::from_secs(10);
 
 mod http_message {
@@ -44,7 +45,7 @@ mod http_message {
 /// path: Starts with `/` e.g. /api/v1/enrichment
 /// data: Body is string literal e.g. `"{\"key\":\"value\"}"`
 pub fn request(method: HttpMethod, path: &str, data: &str) -> Result<String, HttpClientError> {
-    let mut tcp_stream_socket = TcpStream::connect(format!("{}:{}", HOST, PORT)).map_err(|e| {
+    let tcp_stream_socket = TcpStream::connect(format!("{}:{}", HOST, PORT)).map_err(|e| {
         HttpClientError {
             code: 503,
             message: format!("could not connect to host: {} and port number {}: {}", HOST, PORT, e),
@@ -58,7 +59,17 @@ pub fn request(method: HttpMethod, path: &str, data: &str) -> Result<String, Htt
             message: format!("failed to set read timeout: {}", e),
         })?;
 
-    tcp_stream_socket
+    let connector = TlsConnector::new().map_err(|e| HttpClientError {
+        code: 500,
+        message: format!("failed to create TLS connector: {}", e),
+    })?;
+
+    let mut secure_stream = connector.connect(HOST, tcp_stream_socket).map_err(|e| HttpClientError {
+        code: 500,
+        message: format!("failed TLS handshake with {}: {}", HOST, e),
+    })?;
+
+    secure_stream
         .write_all(http_message::new(method, path, data).as_bytes())
         .map_err(|e| HttpClientError {
             code: 500,
@@ -66,15 +77,15 @@ pub fn request(method: HttpMethod, path: &str, data: &str) -> Result<String, Htt
         })?;
 
     let mut resp = String::new();
-    tcp_stream_socket
+    secure_stream
         .read_to_string(&mut resp)
         .map_err(|e| HttpClientError {
             code: 500,
             message: format!("failed to read from socket: {}", e),
         })?;
 
-    let _ = tcp_stream_socket.flush();
-    let _ = tcp_stream_socket.shutdown(Shutdown::Both);
+    let _ = secure_stream.flush();
+    let _ = secure_stream.shutdown();
 
     Ok(resp)
 }

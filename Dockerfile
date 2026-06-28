@@ -3,7 +3,10 @@ FROM rust:1.89-alpine
 RUN apk add --update-cache \
     build-base \
     ca-certificates \
-    openssl
+    openssl \
+    openssl-dev \
+    openssl-libs-static \
+    pkgconfig
 
 RUN rustup component add rustfmt
 
