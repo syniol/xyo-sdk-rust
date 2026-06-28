@@ -5,6 +5,7 @@ RUN apk add --update-cache \
     ca-certificates \
     openssl \
     openssl-dev \
+    openssl-libs-static \
     pkgconfig
 
 RUN rustup component add rustfmt
