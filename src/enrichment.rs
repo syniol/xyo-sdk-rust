@@ -42,7 +42,7 @@ pub trait Enrichment {
 
     fn enrich_transaction_collection(
         &self,
-        rq: Vec<&EnrichmentRequest>,
+        rq: &[EnrichmentRequest],
     ) -> Result<EnrichmentCollectionResponse, ClientError>;
 
     fn enrich_transaction_collection_status(
