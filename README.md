@@ -82,5 +82,8 @@ fn main() {
 ```
 
 
+## License
+This SDK is distributed under the [MIT License](./LICENSE).
+
 #### Credits
-Copyright &copy; 2025 Syniol Limited. All rights reserved.
+Copyright &copy; 2025 Syniol Limited.
