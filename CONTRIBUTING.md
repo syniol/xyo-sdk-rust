@@ -1,4 +1,7 @@
 # How to Contribute
+
+> ⚠️ **Internal Contributions Only**
+> This repository is maintained exclusively by engineers and staff at **Syniol Limited**. We do **not** accept Pull Requests, issues, or code contributions from outside developers. Any external PRs will be automatically closed.
  1. Create a release branch and a pull request to the `main` branch
  2. Push your changes, and ensure versions for the following packages are incremented appropriately:
     * `Cargo.toml`
