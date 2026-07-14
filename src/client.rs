@@ -1,4 +1,4 @@
-use xyo_http::{get_body_from_request_response, get_status_code, request, HttpMethod, HttpClientError};
+use xyo_http::{request, HttpClientError, HttpMethod, HttpResponse};
 
 use crate::enrichment::{
     Enrichment, EnrichmentCollectionResponse, EnrichmentRequest, EnrichmentResponse,
@@ -12,7 +12,12 @@ pub struct ClientConfig {
 
 pub struct Client {
     pub config: ClientConfig,
-    http_client: fn(method: HttpMethod, path: &str, data: &str) -> Result<String, HttpClientError>,
+    http_client: fn(
+        method: HttpMethod,
+        path: &str,
+        headers: &[(&str, &str)],
+        data: &str,
+    ) -> Result<HttpResponse, HttpClientError>,
 }
 
 impl Enrichment for Client {
@@ -20,98 +25,108 @@ impl Enrichment for Client {
         &self,
         rq: &EnrichmentRequest,
     ) -> Result<EnrichmentResponse, ClientError> {
-        let resp = (&self.http_client)(
+        let payload = serde_json::to_string(rq).map_err(|e| ClientError {
+            code: 400,
+            message: format!("Failed to serialize request: {}", e),
+        })?;
+
+        let auth_header = format!("Bearer {}", self.config.api_key);
+        let headers = [("Authorization", auth_header.as_str())];
+
+        let result = (&self.http_client)(
             HttpMethod::POST,
             "/api/v1/transaction",
-            serde_json::to_string(rq).unwrap().as_str(),
-        );
-        if resp.is_err() {
-            let err = resp.err().unwrap();
-            return Err(ClientError{
-                code: err.code,
-                message: err.message,
-            })
-        }
+            &headers,
+            &payload,
+        )
+        .map_err(|e| ClientError {
+            code: e.code,
+            message: e.message,
+        })?;
 
-        let result = resp.ok().unwrap();
-        let status_code = get_status_code(result.clone());
-        if status_code != 200 {
+        if result.status_code != 200 {
             return Err(ClientError {
-                message: get_body_from_request_response(result),
-                code: status_code,
+                message: result.body,
+                code: result.status_code,
             });
         }
 
-        let response_body = get_body_from_request_response(result);
-        let result: EnrichmentResponse = serde_json::from_str(response_body.as_str()).unwrap();
+        let response: EnrichmentResponse =
+            serde_json::from_str(&result.body).map_err(|e| ClientError {
+                code: 500,
+                message: format!("Failed to deserialize response: {}", e),
+            })?;
 
-        Ok(result)
+        Ok(response)
     }
 
     fn enrich_transaction_collection(
         &self,
-        rq: Vec<&EnrichmentRequest>,
+        rq: &[EnrichmentRequest],
     ) -> Result<EnrichmentCollectionResponse, ClientError> {
-        let resp = (&self.http_client)(
+        let payload = serde_json::to_string(rq).map_err(|e| ClientError {
+            code: 400,
+            message: format!("Failed to serialize request: {}", e),
+        })?;
+
+        let auth_header = format!("Bearer {}", self.config.api_key);
+        let headers = [("Authorization", auth_header.as_str())];
+
+        let result = (&self.http_client)(
             HttpMethod::POST,
             "/api/v1/transactions",
-            serde_json::to_string(&rq).unwrap().as_str(),
-        );
-        if resp.is_err() {
-            let err = resp.err().unwrap();
-            return Err(ClientError{
-                code: err.code,
-                message: err.message,
-            })
-        }
+            &headers,
+            &payload,
+        )
+        .map_err(|e| ClientError {
+            code: e.code,
+            message: e.message,
+        })?;
 
-        let result = resp.ok().unwrap();
-        let status_code = get_status_code(result.clone());
-        if status_code != 200 {
+        if result.status_code != 200 {
             return Err(ClientError {
-                message: get_body_from_request_response(result),
-                code: status_code,
+                message: result.body,
+                code: result.status_code,
             });
         }
 
-        let response_body = get_body_from_request_response(result);
-        let result: EnrichmentCollectionResponse =
-            serde_json::from_str(response_body.as_str()).unwrap();
+        let response: EnrichmentCollectionResponse =
+            serde_json::from_str(&result.body).map_err(|e| ClientError {
+                code: 500,
+                message: format!("Failed to deserialize response: {}", e),
+            })?;
 
-        Ok(result)
+        Ok(response)
     }
 
     fn enrich_transaction_collection_status(
         &self,
         id: &str,
     ) -> Result<EnrichmentTransactionCollectionStatus, ClientError> {
-        let resp = (&self.http_client)(
-            HttpMethod::GET,
-            format!("/api/v1/transactions/status/{}", id).as_str(),
-            "",
-        );
-        if resp.is_err() {
-            let err = resp.err().unwrap();
-            return Err(ClientError{
-                code: err.code,
-                message: err.message,
-            })
-        }
+        let auth_header = format!("Bearer {}", self.config.api_key);
+        let headers = [("Authorization", auth_header.as_str())];
+        let path = format!("/api/v1/transactions/status/{}", id);
 
-        let result = resp.ok().unwrap();
-        let status_code: i16 = get_status_code(result.clone());
-        if status_code != 200 {
+        let result = (&self.http_client)(HttpMethod::GET, &path, &headers, "")
+            .map_err(|e| ClientError {
+                code: e.code,
+                message: e.message,
+            })?;
+
+        if result.status_code != 200 {
             return Err(ClientError {
-                message: get_body_from_request_response(result),
-                code: status_code,
+                message: result.body,
+                code: result.status_code,
             });
         }
 
-        let response_body = get_body_from_request_response(result);
-        let result: EnrichmentTransactionCollectionStatusResponse =
-            serde_json::from_str(response_body.as_str()).unwrap();
+        let response: EnrichmentTransactionCollectionStatusResponse =
+            serde_json::from_str(&result.body).map_err(|e| ClientError {
+                code: 500,
+                message: format!("Failed to deserialize response: {}", e),
+            })?;
 
-        Ok(result.status)
+        Ok(response.status)
     }
 }
 
@@ -128,9 +143,14 @@ mod tests {
 
     #[test]
     fn it_works_when_enrich_transaction_has_ok_status_code() {
-        use xyo_http::HttpMethod;
+        use xyo_http::{HttpMethod, HttpResponse};
 
-        fn mocked_request_call(_method: HttpMethod, _path: &str, _request_data: &str) -> Result<String, HttpClientError> {
+        fn mocked_request_call(
+            _method: HttpMethod,
+            _path: &str,
+            _headers: &[(&str, &str)],
+            _request_data: &str,
+        ) -> Result<HttpResponse, HttpClientError> {
             let mocked_enrichment_response: EnrichmentResponse = EnrichmentResponse {
                 merchant: String::from("Syniol Limited"),
                 description: String::from("Software and Platform Consultancy"),
@@ -140,10 +160,10 @@ mod tests {
                 address: Some(String::from("")),
             };
 
-            Ok(String::from(format!(
-                "HTTP/1.1 200 OK\r\nServer: nginx/1.22.1\r\nContent-Type: application/json\r\n\n{}",
-                serde_json::to_string(&mocked_enrichment_response).unwrap(),
-            )))
+            Ok(HttpResponse {
+                status_code: 200,
+                body: serde_json::to_string(&mocked_enrichment_response).unwrap(),
+            })
         }
 
         let client = Client {
@@ -158,7 +178,8 @@ mod tests {
             country_code: String::from("GB"),
         });
 
-        let actual:EnrichmentResponse = resp.unwrap();
+        assert!(resp.is_ok());
+        let actual: EnrichmentResponse = resp.unwrap();
 
         assert_eq!("Syniol Limited", actual.merchant);
         assert_eq!("Software and Platform Consultancy", actual.description);
@@ -170,15 +191,18 @@ mod tests {
 
     #[test]
     fn it_errors_when_enrich_transaction_has_not_ok_status_code() {
-        use xyo_http::HttpMethod;
+        use xyo_http::{HttpMethod, HttpResponse};
 
-        fn mocked_request_call(_method: HttpMethod, _path: &str, _request_data: &str) -> Result<String, HttpClientError> {
-            let mocked_enrichment_response_err = "mocked error response";
-
-            Ok(String::from(format!(
-                "HTTP/1.1 400 OK\r\nServer: nginx/1.22.1\r\nContent-Type: application/json\r\n{}",
-                mocked_enrichment_response_err,
-            )))
+        fn mocked_request_call(
+            _method: HttpMethod,
+            _path: &str,
+            _headers: &[(&str, &str)],
+            _request_data: &str,
+        ) -> Result<HttpResponse, HttpClientError> {
+            Ok(HttpResponse {
+                status_code: 400,
+                body: "mocked error response".to_string(),
+            })
         }
 
         let client = Client {
@@ -193,6 +217,7 @@ mod tests {
             country_code: String::from("GB"),
         });
 
+        assert!(resp.is_err());
         let actual = resp.unwrap_err();
 
         assert_eq!(actual.message, "mocked error response");
