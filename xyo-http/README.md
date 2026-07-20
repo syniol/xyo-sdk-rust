@@ -35,4 +35,4 @@ Content-Length: 48
 
 
 #### Credits
-Copyright &copy; Syniol Limited. All rights reserved.
+Copyright &copy; Syniol Limited. Licensed under the BSD 3-Clause License - see the [LICENSE](../LICENSE) file for details.

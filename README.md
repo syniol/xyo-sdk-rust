@@ -1,4 +1,4 @@
-# XYO Financial SDK for Rust
+# XYO.Financial SDK for Rust
 ![workflow](https://github.com/syniol/xyo-sdk-rust/actions/workflows/makefile.yml/badge.svg)    ![workflow](https://github.com/syniol/xyo-sdk-rust/actions/workflows/crates_xyo_http_publish.yml/badge.svg)    ![workflow](https://github.com/syniol/xyo-sdk-rust/actions/workflows/crates_publish.yml/badge.svg)
 
 <p align="center">
@@ -83,7 +83,6 @@ fn main() {
 
 
 ## License
-This SDK is distributed under the [MIT License](./LICENSE).
+This project is licensed under the BSD 3-Clause License - see the [LICENSE](LICENSE) file for details.
 
-#### Credits
 Copyright &copy; 2025 Syniol Limited.

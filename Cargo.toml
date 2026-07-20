@@ -2,7 +2,7 @@ workspace = { members = ["xyo-http"], exclude = ["example"] }
 [package]
 name = "xyo-sdk"
 description = "XYO Financial Official SDK for Rust"
-version = "1.1.7"
+version = "1.1.8"
 edition = "2021"
 authors = [
     "Hadi Tajallaei <hadi@syniol.com>"
@@ -10,7 +10,7 @@ authors = [
 repository = "https://github.com/syniol/xyo-sdk-rust"
 homepage = "https://xyo.financial"
 categories = ["finance"]
-license = "MIT"
+license = "BSD-3-Clause"
 readme = "README.md"
 exclude = [
     ".idea",
@@ -26,4 +26,4 @@ exclude = [
 [dependencies]
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.143"
-xyo-http = { version = "1.1.7", path = "xyo-http" }
+xyo-http = { version = "1.1.8", path = "xyo-http" }
