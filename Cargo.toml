@@ -10,7 +10,7 @@ authors = [
 repository = "https://github.com/syniol/xyo-sdk-rust"
 homepage = "https://xyo.financial"
 categories = ["finance"]
-license = "MIT"
+license = "BSD-3-Clause"
 readme = "README.md"
 exclude = [
     ".idea",
