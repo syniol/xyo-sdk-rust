@@ -1,226 +1,338 @@
-use xyo_http::{request, HttpClientError, HttpMethod, HttpResponse};
+//! XYO Financial SDK – thin async wrapper over the OpenAPI-generated client.
+//!
+//! # Example
+//! ```no_run
+//! use xyo_sdk::client::{Client, EnrichmentRequest};
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let client = Client::new("your-bearer-token", None);
+//!     let resp = client.enrich_transaction("COSTA PICKUP", "GB").await.unwrap();
+//!     println!("{}", resp.merchant);
+//! }
+//! ```
 
-use crate::enrichment::{
-    Enrichment, EnrichmentCollectionResponse, EnrichmentRequest, EnrichmentResponse,
-    EnrichmentTransactionCollectionStatus, EnrichmentTransactionCollectionStatusResponse,
-};
+use openapi_client::apis::configuration::Configuration;
+use openapi_client::apis::enrichment_api;
+use openapi_client::models::{EnrichmentRequest as ApiEnrichmentRequest, EnrichTransactionsRequestInner};
+use serde::{Deserialize, Serialize};
+
 use crate::error::ClientError;
 
-pub struct ClientConfig {
-    pub api_key: String,
+// ── Re-exported response types ────────────────────────────────────────────────
+
+/// Response from a single-transaction enrichment.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnrichmentResponse {
+    pub merchant: String,
+    pub description: String,
+    pub categories: Vec<String>,
+    pub logo: String,
+    /// Empty string when the API returns null / empty.
+    pub location: String,
+    /// Empty string when the API returns null / empty.
+    pub address: String,
 }
 
+/// Response from a bulk enrichment submission.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnrichTransactionCollectionResponse {
+    /// Work-item ID used to poll for completion.
+    pub id: String,
+    /// URL of the downloadable tar.gz results archive.
+    pub link: String,
+}
+
+/// Processing state of a bulk enrichment job.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EnrichmentStatus {
+    Ready,
+    Pending,
+    Failed,
+}
+
+/// A single transaction to submit for enrichment.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnrichmentRequest {
+    /// Payment description (max 128 chars).
+    pub content: String,
+    /// ISO 3166-1 alpha-2 country code (e.g. "GB").
+    pub country_code: String,
+}
+
+// ── Client ────────────────────────────────────────────────────────────────────
+
+/// Async client for the XYO Financial Transaction Enrichment API.
 pub struct Client {
-    pub config: ClientConfig,
-    http_client: fn(
-        method: HttpMethod,
-        path: &str,
-        headers: &[(&str, &str)],
-        data: &str,
-    ) -> Result<HttpResponse, HttpClientError>,
+    configuration: Configuration,
 }
 
-impl Enrichment for Client {
-    fn enrich_transaction(
+impl Client {
+    /// Construct a new client.
+    ///
+    /// * `bearer_token` – the API Bearer token.
+    /// * `base_url`     – override the server URL (default: `https://api.xyo.financial`).
+    pub fn new(bearer_token: impl Into<String>, base_url: Option<String>) -> Self {
+        let mut configuration = Configuration::new();
+        configuration.bearer_access_token = Some(bearer_token.into());
+        if let Some(url) = base_url {
+            configuration.base_path = url;
+        }
+        Client { configuration }
+    }
+
+    // ── enrichTransaction ─────────────────────────────────────────────────────
+
+    /// Enrich a single financial transaction synchronously.
+    pub async fn enrich_transaction(
         &self,
-        rq: &EnrichmentRequest,
+        content: impl Into<String>,
+        country_code: impl Into<String>,
     ) -> Result<EnrichmentResponse, ClientError> {
-        let payload = serde_json::to_string(rq).map_err(|e| ClientError {
-            code: 400,
-            message: format!("Failed to serialize request: {}", e),
-        })?;
+        let body = ApiEnrichmentRequest::new(content.into(), country_code.into());
 
-        let auth_header = format!("Bearer {}", self.config.api_key);
-        let headers = [("Authorization", auth_header.as_str())];
+        let resp = enrichment_api::enrich_transaction(&self.configuration, Some(body))
+            .await
+            .map_err(map_error)?;
 
-        let result = (&self.http_client)(
-            HttpMethod::POST,
-            "/api/v1/transaction",
-            &headers,
-            &payload,
-        )
-        .map_err(|e| ClientError {
-            code: e.code,
-            message: e.message,
-        })?;
-
-        if result.status_code != 200 {
-            return Err(ClientError {
-                message: result.body,
-                code: result.status_code,
-            });
-        }
-
-        let response: EnrichmentResponse =
-            serde_json::from_str(&result.body).map_err(|e| ClientError {
-                code: 500,
-                message: format!("Failed to deserialize response: {}", e),
-            })?;
-
-        Ok(response)
+        Ok(EnrichmentResponse {
+            merchant: resp.merchant,
+            description: resp.description,
+            categories: resp.categories,
+            logo: resp.logo,
+            location: resp.location,
+            address: resp.address,
+        })
     }
 
-    fn enrich_transaction_collection(
+    // ── enrichTransactions ────────────────────────────────────────────────────
+
+    /// Enrich a collection of financial transactions asynchronously.
+    ///
+    /// Returns a job `id` that can be polled with [`Client::get_enrichment_status`].
+    pub async fn enrich_transactions(
         &self,
-        rq: &[EnrichmentRequest],
-    ) -> Result<EnrichmentCollectionResponse, ClientError> {
-        let payload = serde_json::to_string(rq).map_err(|e| ClientError {
-            code: 400,
-            message: format!("Failed to serialize request: {}", e),
-        })?;
+        requests: impl IntoIterator<Item = EnrichmentRequest>,
+        api_user: Option<&str>,
+    ) -> Result<EnrichTransactionCollectionResponse, ClientError> {
+        let items: Vec<EnrichTransactionsRequestInner> = requests
+            .into_iter()
+            .map(|r| EnrichTransactionsRequestInner {
+                content: Some(r.content),
+                country_code: Some(r.country_code),
+            })
+            .collect();
 
-        let auth_header = format!("Bearer {}", self.config.api_key);
-        let headers = [("Authorization", auth_header.as_str())];
+        let x_api_user = api_user.map(serde_json::Value::from);
 
-        let result = (&self.http_client)(
-            HttpMethod::POST,
-            "/api/v1/transactions",
-            &headers,
-            &payload,
-        )
-        .map_err(|e| ClientError {
-            code: e.code,
-            message: e.message,
-        })?;
+        let resp = enrichment_api::enrich_transactions(&self.configuration, x_api_user, Some(items))
+            .await
+            .map_err(map_error)?;
 
-        if result.status_code != 200 {
-            return Err(ClientError {
-                message: result.body,
-                code: result.status_code,
-            });
-        }
-
-        let response: EnrichmentCollectionResponse =
-            serde_json::from_str(&result.body).map_err(|e| ClientError {
-                code: 500,
-                message: format!("Failed to deserialize response: {}", e),
-            })?;
-
-        Ok(response)
+        Ok(EnrichTransactionCollectionResponse {
+            id: resp.id,
+            link: resp.link,
+        })
     }
 
-    fn enrich_transaction_collection_status(
+    // ── getEnrichmentStatus ───────────────────────────────────────────────────
+
+    /// Get the status of an asynchronous bulk enrichment job.
+    pub async fn get_enrichment_status(
         &self,
         id: &str,
-    ) -> Result<EnrichmentTransactionCollectionStatus, ClientError> {
-        let auth_header = format!("Bearer {}", self.config.api_key);
-        let headers = [("Authorization", auth_header.as_str())];
-        let path = format!("/api/v1/transactions/status/{}", id);
+        api_user: Option<&str>,
+    ) -> Result<EnrichmentStatus, ClientError> {
+        let resp = enrichment_api::get_enrichment_status(&self.configuration, id, api_user)
+            .await
+            .map_err(map_error)?;
 
-        let result = (&self.http_client)(HttpMethod::GET, &path, &headers, "")
-            .map_err(|e| ClientError {
-                code: e.code,
-                message: e.message,
-            })?;
 
-        if result.status_code != 200 {
-            return Err(ClientError {
-                message: result.body,
-                code: result.status_code,
-            });
-        }
-
-        let response: EnrichmentTransactionCollectionStatusResponse =
-            serde_json::from_str(&result.body).map_err(|e| ClientError {
-                code: 500,
-                message: format!("Failed to deserialize response: {}", e),
-            })?;
-
-        Ok(response.status)
+        use openapi_client::models::enrichment_collection_status_response::Status;
+        Ok(match resp.status {
+            Status::Ready => EnrichmentStatus::Ready,
+            Status::Pending => EnrichmentStatus::Pending,
+            Status::Failed => EnrichmentStatus::Failed,
+        })
     }
 }
 
-pub fn new(config: ClientConfig) -> Client {
-    Client {
-        config,
-        http_client: request,
+// ── Error mapping ─────────────────────────────────────────────────────────────
+
+fn map_error<T: std::fmt::Debug>(err: openapi_client::apis::Error<T>) -> ClientError {
+    match err {
+        openapi_client::apis::Error::ResponseError(rc) => ClientError {
+            code: rc.status.as_u16(),
+            message: rc.content,
+        },
+        openapi_client::apis::Error::Reqwest(e) => ClientError {
+            code: e.status().map(|s| s.as_u16()).unwrap_or(0),
+            message: e.to_string(),
+        },
+        openapi_client::apis::Error::Serde(e) => ClientError {
+            code: 0,
+            message: e.to_string(),
+        },
+        openapi_client::apis::Error::Io(e) => ClientError {
+            code: 0,
+            message: e.to_string(),
+        },
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use openapi_client::apis::ResponseContent;
 
     #[test]
-    fn it_works_when_enrich_transaction_has_ok_status_code() {
-        use xyo_http::{HttpMethod, HttpResponse};
-
-        fn mocked_request_call(
-            _method: HttpMethod,
-            _path: &str,
-            _headers: &[(&str, &str)],
-            _request_data: &str,
-        ) -> Result<HttpResponse, HttpClientError> {
-            let mocked_enrichment_response: EnrichmentResponse = EnrichmentResponse {
-                merchant: String::from("Syniol Limited"),
-                description: String::from("Software and Platform Consultancy"),
-                categories: vec![String::from("Software")],
-                logo: String::from("base64/png-dsadsadasdasdasdasdsa"),
-                location: Some(String::from("London, United Kingdom")),
-                address: Some(String::from("")),
-            };
-
-            Ok(HttpResponse {
-                status_code: 200,
-                body: serde_json::to_string(&mocked_enrichment_response).unwrap(),
-            })
-        }
-
-        let client = Client {
-            http_client: mocked_request_call,
-            config: ClientConfig {
-                api_key: "MyAPIKeyFromDashboardXYO.Financial".to_string(),
-            },
-        };
-
-        let resp = client.enrich_transaction(&EnrichmentRequest {
-            content: String::from("Syniol Tech"),
-            country_code: String::from("GB"),
-        });
-
-        assert!(resp.is_ok());
-        let actual: EnrichmentResponse = resp.unwrap();
-
-        assert_eq!("Syniol Limited", actual.merchant);
-        assert_eq!("Software and Platform Consultancy", actual.description);
-        assert_eq!(vec![String::from("Software")], actual.categories);
-        assert_eq!("base64/png-dsadsadasdasdasdasdsa", actual.logo);
-        assert_eq!("London, United Kingdom", actual.location.unwrap());
-        assert_eq!("", actual.address.unwrap());
+    fn test_client_new_default_base_url() {
+        let client = Client::new("my-token", None);
+        assert_eq!(client.configuration.base_path, "https://api.xyo.financial");
+        assert_eq!(
+            client.configuration.bearer_access_token,
+            Some("my-token".to_string())
+        );
     }
 
     #[test]
-    fn it_errors_when_enrich_transaction_has_not_ok_status_code() {
-        use xyo_http::{HttpMethod, HttpResponse};
+    fn test_client_new_custom_base_url() {
+        let client = Client::new("my-token", Some("https://sandbox.api.xyo.financial".to_string()));
+        assert_eq!(
+            client.configuration.base_path,
+            "https://sandbox.api.xyo.financial"
+        );
+        assert_eq!(
+            client.configuration.bearer_access_token,
+            Some("my-token".to_string())
+        );
+    }
 
-        fn mocked_request_call(
-            _method: HttpMethod,
-            _path: &str,
-            _headers: &[(&str, &str)],
-            _request_data: &str,
-        ) -> Result<HttpResponse, HttpClientError> {
-            Ok(HttpResponse {
-                status_code: 400,
-                body: "mocked error response".to_string(),
-            })
-        }
+    #[test]
+    fn test_client_new_with_string_and_str() {
+        let token_str = "token-1";
+        let token_string = "token-2".to_string();
 
-        let client = Client {
-            http_client: mocked_request_call,
-            config: ClientConfig {
-                api_key: "MyAPIKeyFromDashboardXYO.Financial".to_string(),
-            },
+        let client1 = Client::new(token_str, None);
+        let client2 = Client::new(token_string, None);
+
+        assert_eq!(
+            client1.configuration.bearer_access_token,
+            Some("token-1".to_string())
+        );
+        assert_eq!(
+            client2.configuration.bearer_access_token,
+            Some("token-2".to_string())
+        );
+    }
+
+    #[test]
+    fn test_enrichment_response_serde() {
+        let json_str = r#"{
+            "merchant": "Uber",
+            "description": "Ridesharing service",
+            "categories": ["Transportation", "Taxi"],
+            "logo": "data:image/png;base64,123",
+            "location": "San Francisco, CA",
+            "address": "1455 Market St"
+        }"#;
+
+        let parsed: EnrichmentResponse = serde_json::from_str(json_str).unwrap();
+        assert_eq!(parsed.merchant, "Uber");
+        assert_eq!(parsed.description, "Ridesharing service");
+        assert_eq!(parsed.categories, vec!["Transportation", "Taxi"]);
+        assert_eq!(parsed.logo, "data:image/png;base64,123");
+        assert_eq!(parsed.location, "San Francisco, CA");
+        assert_eq!(parsed.address, "1455 Market St");
+
+        let serialized = serde_json::to_string(&parsed).unwrap();
+        assert!(serialized.contains("Uber"));
+    }
+
+    #[test]
+    fn test_enrich_transaction_collection_response_serde() {
+        let json_str = r#"{
+            "id": "work-item-12345",
+            "link": "https://download.xyo.financial/file.tar.gz"
+        }"#;
+
+        let parsed: EnrichTransactionCollectionResponse = serde_json::from_str(json_str).unwrap();
+        assert_eq!(parsed.id, "work-item-12345");
+        assert_eq!(parsed.link, "https://download.xyo.financial/file.tar.gz");
+
+        let serialized = serde_json::to_string(&parsed).unwrap();
+        assert!(serialized.contains("work-item-12345"));
+    }
+
+    #[test]
+    fn test_enrichment_status_serde_and_variants() {
+        let ready = EnrichmentStatus::Ready;
+        let pending = EnrichmentStatus::Pending;
+        let failed = EnrichmentStatus::Failed;
+
+        let json_ready = serde_json::to_string(&ready).unwrap();
+        let json_pending = serde_json::to_string(&pending).unwrap();
+        let json_failed = serde_json::to_string(&failed).unwrap();
+
+        assert_eq!(
+            serde_json::from_str::<EnrichmentStatus>(&json_ready).unwrap(),
+            EnrichmentStatus::Ready
+        );
+        assert_eq!(
+            serde_json::from_str::<EnrichmentStatus>(&json_pending).unwrap(),
+            EnrichmentStatus::Pending
+        );
+        assert_eq!(
+            serde_json::from_str::<EnrichmentStatus>(&json_failed).unwrap(),
+            EnrichmentStatus::Failed
+        );
+    }
+
+    #[test]
+    fn test_enrichment_request_serde() {
+        let req = EnrichmentRequest {
+            content: "COSTA COFFEE".to_string(),
+            country_code: "GB".to_string(),
         };
 
-        let resp = client.enrich_transaction(&EnrichmentRequest {
-            content: String::from("Syniol Tech"),
-            country_code: String::from("GB"),
-        });
+        let json_str = serde_json::to_string(&req).unwrap();
+        let parsed: EnrichmentRequest = serde_json::from_str(&json_str).unwrap();
+        assert_eq!(parsed.content, "COSTA COFFEE");
+        assert_eq!(parsed.country_code, "GB");
+    }
 
-        assert!(resp.is_err());
-        let actual = resp.unwrap_err();
+    #[test]
+    fn test_map_error_response_error() {
+        let err: openapi_client::apis::Error<()> =
+            openapi_client::apis::Error::ResponseError(ResponseContent {
+                status: reqwest::StatusCode::FORBIDDEN,
+                content: "Forbidden action".to_string(),
+                entity: None,
+            });
 
-        assert_eq!(actual.message, "mocked error response");
-        assert_eq!(actual.code, 400);
+        let client_err = map_error(err);
+        assert_eq!(client_err.code, 403);
+        assert_eq!(client_err.message, "Forbidden action");
+    }
+
+    #[test]
+    fn test_map_error_serde() {
+        let serde_err: serde_json::Error = serde_json::from_str::<i32>("not an integer").unwrap_err();
+        let err: openapi_client::apis::Error<()> = openapi_client::apis::Error::Serde(serde_err);
+
+        let client_err = map_error(err);
+        assert_eq!(client_err.code, 0);
+        assert!(!client_err.message.is_empty());
+    }
+
+    #[test]
+    fn test_map_error_io() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::ConnectionReset, "connection reset");
+        let err: openapi_client::apis::Error<()> = openapi_client::apis::Error::Io(io_err);
+
+        let client_err = map_error(err);
+        assert_eq!(client_err.code, 0);
+        assert!(client_err.message.contains("connection reset"));
     }
 }
+

@@ -1,8 +1,9 @@
-workspace = { members = ["xyo-http"], exclude = ["example"] }
+workspace = { members = ["openapi"], exclude = ["example"] }
+
 [package]
 name = "xyo-sdk"
 description = "XYO Financial Official SDK for Rust"
-version = "1.1.9"
+version = "2.0.0"
 edition = "2021"
 authors = [
     "Hadi Tajallaei <hadi@syniol.com>"
@@ -26,4 +27,11 @@ exclude = [
 [dependencies]
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.143"
-xyo-http = { version = "1.1.9", path = "xyo-http" }
+openapi-client = { version = "2.0.0", path = "openapi" }
+tokio = { version = "=1.38.0", features = ["rt-multi-thread", "macros"] }
+
+[dev-dependencies]
+wiremock = "0.6"
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
+
+

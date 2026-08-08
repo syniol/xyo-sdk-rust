@@ -1,0 +1,42 @@
+name: Regenerate Rust OpenAPI Client
+
+on:
+  push:
+    paths:
+      - 'specs/openapi.yml'
+  workflow_dispatch:
+
+jobs:
+  generate:
+    name: Generate OpenAPI Rust client
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js (for openapi-generator-cli)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate Rust client from OpenAPI spec
+        run: |
+          npx -y @openapitools/openapi-generator-cli generate \
+            -i specs/openapi.yml \
+            -g rust \
+            -o rust/openapi \
+            --additional-properties=packageName=xyo-sdk,packageVersion=2.0.0
+
+      - name: Build workspace to verify compilation
+        working-directory: rust
+        run: cargo build
+
+      - name: Commit regenerated client
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore(rust): regenerate OpenAPI client from updated spec"
+          file_pattern: "rust/openapi/**"
