@@ -712,3 +712,313 @@ async fn test_connection_failure_maps_to_client_error() {
     assert!(!err.message.is_empty());
 }
 
+// ── Helper for creating in-memory .tar.gz archives ────────────────────────────
+
+fn create_test_tar_gz(entries: &[(&str, &[u8])]) -> Vec<u8> {
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+    use tar::Builder;
+
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+    {
+        let mut tar_builder = Builder::new(&mut encoder);
+        for (name, data) in entries {
+            let mut header = tar::Header::new_gnu();
+            header.set_path(name).unwrap();
+            header.set_size(data.len() as u64);
+            header.set_mode(0o644);
+            header.set_cksum();
+            tar_builder.append(&header, *data).unwrap();
+        }
+        tar_builder.finish().unwrap();
+    }
+    encoder.finish().unwrap()
+}
+
+// ── download_enrichment_collection tests ──────────────────────────────────────
+
+#[tokio::test]
+async fn test_download_enrichment_collection_success() {
+    let mock_server = MockServer::start().await;
+    let token = "download-secret-token";
+    let client = Client::new(token, Some(mock_server.uri()));
+
+    let tx0_json = serde_json::to_vec(&serde_json::json!({
+        "merchant": "Costa Coffee",
+        "description": "British coffeehouse chain",
+        "categories": ["Food & Beverage", "Coffee"],
+        "logo": "data:image/png;base64,costa_logo",
+        "location": "London, UK",
+        "address": "123 High St"
+    }))
+    .unwrap();
+
+    let tx1_json = serde_json::to_vec(&serde_json::json!({
+        "merchant": "Uber",
+        "description": "Ridesharing app",
+        "categories": ["Transportation"],
+        "logo": "data:image/png;base64,uber_logo",
+        "location": "San Francisco, CA",
+        "address": "1455 Market St"
+    }))
+    .unwrap();
+
+    let archive = create_test_tar_gz(&[
+        ("transaction_0.json", &tx0_json),
+        ("transaction_1.json", &tx1_json),
+    ]);
+
+    Mock::given(method("GET"))
+        .and(path("/v1/ai/finance/enrichment/download/batch-999.tar.gz"))
+        .and(bearer_token(token))
+        .and(header("accept", "application/gzip"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_bytes(archive)
+                .insert_header("content-type", "application/gzip"),
+        )
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    let download_url = format!("{}/v1/ai/finance/enrichment/download/batch-999.tar.gz", mock_server.uri());
+    let results = client
+        .download_enrichment_collection(&download_url)
+        .await
+        .expect("download_enrichment_collection should succeed");
+
+    assert_eq!(results.len(), 2);
+    assert_eq!(results[0].merchant, "Costa Coffee");
+    assert_eq!(results[0].description, "British coffeehouse chain");
+    assert_eq!(results[0].categories, vec!["Food & Beverage", "Coffee"]);
+    assert_eq!(results[0].logo, "data:image/png;base64,costa_logo");
+    assert_eq!(results[0].location, "London, UK");
+    assert_eq!(results[0].address, "123 High St");
+
+    assert_eq!(results[1].merchant, "Uber");
+    assert_eq!(results[1].description, "Ridesharing app");
+    assert_eq!(results[1].categories, vec!["Transportation"]);
+    assert_eq!(results[1].logo, "data:image/png;base64,uber_logo");
+    assert_eq!(results[1].location, "San Francisco, CA");
+    assert_eq!(results[1].address, "1455 Market St");
+}
+
+#[tokio::test]
+async fn test_download_enrichment_collection_relative_url() {
+    let mock_server = MockServer::start().await;
+    let client = Client::new("test-token", Some(mock_server.uri()));
+
+    let tx_json = serde_json::to_vec(&serde_json::json!({
+        "merchant": "Syniol Limited",
+        "description": "AI Financial Software",
+        "categories": ["Technology", "Fintech"],
+        "logo": "syniol_logo",
+        "location": "London, UK",
+        "address": "1 Finsbury Square"
+    }))
+    .unwrap();
+
+    let archive = create_test_tar_gz(&[("result.json", &tx_json)]);
+
+    Mock::given(method("GET"))
+        .and(path("/downloads/batch-rel.tar.gz"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_bytes(archive)
+                .insert_header("content-type", "application/gzip"),
+        )
+        .mount(&mock_server)
+        .await;
+
+    let results = client
+        .download_enrichment_collection("/downloads/batch-rel.tar.gz")
+        .await
+        .expect("relative download URL should succeed");
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].merchant, "Syniol Limited");
+}
+
+#[tokio::test]
+async fn test_download_enrichment_collection_filters_non_json_files() {
+    let mock_server = MockServer::start().await;
+    let client = Client::new("test-token", Some(mock_server.uri()));
+
+    let tx_json = serde_json::to_vec(&serde_json::json!({
+        "merchant": "Starbucks",
+        "description": "Coffee",
+        "categories": ["Food"],
+        "logo": "",
+        "location": "",
+        "address": ""
+    }))
+    .unwrap();
+
+    let text_file = b"This is a manifest file, not JSON";
+    let subfolder_json = serde_json::to_vec(&serde_json::json!({
+        "merchant": "Netflix",
+        "description": "Streaming",
+        "categories": ["Entertainment"],
+        "logo": "",
+        "location": "",
+        "address": ""
+    }))
+    .unwrap();
+
+    let archive = create_test_tar_gz(&[
+        ("manifest.txt", text_file),
+        ("README.md", b"# Results"),
+        ("item_0.json", &tx_json),
+        ("nested/item_1.json", &subfolder_json),
+    ]);
+
+    Mock::given(method("GET"))
+        .and(path("/downloads/filter-test.tar.gz"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_bytes(archive)
+                .insert_header("content-type", "application/gzip"),
+        )
+        .mount(&mock_server)
+        .await;
+
+    let results = client
+        .download_enrichment_collection("/downloads/filter-test.tar.gz")
+        .await
+        .expect("should succeed and ignore non-json files");
+
+    assert_eq!(results.len(), 2);
+    let merchants: Vec<&str> = results.iter().map(|r| r.merchant.as_str()).collect();
+    assert!(merchants.contains(&"Starbucks"));
+    assert!(merchants.contains(&"Netflix"));
+}
+
+#[tokio::test]
+async fn test_download_enrichment_collection_401_unauthorized() {
+    let mock_server = MockServer::start().await;
+    let client = Client::new("invalid-token", Some(mock_server.uri()));
+
+    Mock::given(method("GET"))
+        .and(path("/downloads/unauthorized.tar.gz"))
+        .respond_with(
+            ResponseTemplate::new(401)
+                .set_body_string("{\"error\":\"Unauthorized\"}")
+                .insert_header("content-type", "application/json"),
+        )
+        .mount(&mock_server)
+        .await;
+
+    let err = client
+        .download_enrichment_collection("/downloads/unauthorized.tar.gz")
+        .await
+        .expect_err("should return ClientError 401");
+
+    assert_eq!(err.code, 401);
+    assert!(err.message.contains("Unauthorized"));
+}
+
+#[tokio::test]
+async fn test_download_enrichment_collection_404_not_found() {
+    let mock_server = MockServer::start().await;
+    let client = Client::new("test-token", Some(mock_server.uri()));
+
+    Mock::given(method("GET"))
+        .and(path("/downloads/nonexistent.tar.gz"))
+        .respond_with(ResponseTemplate::new(404).set_body_string("Archive not found"))
+        .mount(&mock_server)
+        .await;
+
+    let err = client
+        .download_enrichment_collection("/downloads/nonexistent.tar.gz")
+        .await
+        .expect_err("should return ClientError 404");
+
+    assert_eq!(err.code, 404);
+    assert_eq!(err.message, "Archive not found");
+}
+
+#[tokio::test]
+async fn test_download_enrichment_collection_500_internal_server_error() {
+    let mock_server = MockServer::start().await;
+    let client = Client::new("test-token", Some(mock_server.uri()));
+
+    Mock::given(method("GET"))
+        .and(path("/downloads/server-error.tar.gz"))
+        .respond_with(ResponseTemplate::new(500).set_body_string("Internal Server Error"))
+        .mount(&mock_server)
+        .await;
+
+    let err = client
+        .download_enrichment_collection("/downloads/server-error.tar.gz")
+        .await
+        .expect_err("should return ClientError 500");
+
+    assert_eq!(err.code, 500);
+    assert_eq!(err.message, "Internal Server Error");
+}
+
+#[tokio::test]
+async fn test_download_enrichment_collection_corrupt_gzip() {
+    let mock_server = MockServer::start().await;
+    let client = Client::new("test-token", Some(mock_server.uri()));
+
+    Mock::given(method("GET"))
+        .and(path("/downloads/corrupt.tar.gz"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_bytes(b"not a valid gzip archive content".to_vec())
+                .insert_header("content-type", "application/gzip"),
+        )
+        .mount(&mock_server)
+        .await;
+
+    let err = client
+        .download_enrichment_collection("/downloads/corrupt.tar.gz")
+        .await
+        .expect_err("corrupt gzip should return ClientError");
+
+    assert_eq!(err.code, 0);
+    assert!(!err.message.is_empty());
+}
+
+#[tokio::test]
+async fn test_download_enrichment_collection_invalid_json() {
+    let mock_server = MockServer::start().await;
+    let client = Client::new("test-token", Some(mock_server.uri()));
+
+    let invalid_json = b"{\"merchant\": \"incomplete...";
+    let archive = create_test_tar_gz(&[("bad_data.json", invalid_json)]);
+
+    Mock::given(method("GET"))
+        .and(path("/downloads/bad-json.tar.gz"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_bytes(archive)
+                .insert_header("content-type", "application/gzip"),
+        )
+        .mount(&mock_server)
+        .await;
+
+    let err = client
+        .download_enrichment_collection("/downloads/bad-json.tar.gz")
+        .await
+        .expect_err("invalid json entry should return ClientError");
+
+    assert_eq!(err.code, 0);
+    assert!(err.message.contains("Failed to parse JSON"));
+}
+
+#[tokio::test]
+async fn test_download_enrichment_collection_transport_failure() {
+    let client = Client::new("test-token", Some("http://127.0.0.1:1".to_string()));
+
+    let err = client
+        .download_enrichment_collection("http://127.0.0.1:1/nonexistent.tar.gz")
+        .await
+        .expect_err("connection refusal should return ClientError");
+
+    assert_eq!(err.code, 0);
+    assert!(!err.message.is_empty());
+}
+
+

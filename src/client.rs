@@ -22,15 +22,21 @@ use crate::error::ClientError;
 // ── Re-exported response types ────────────────────────────────────────────────
 
 /// Response from a single-transaction enrichment.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EnrichmentResponse {
+    #[serde(default)]
     pub merchant: String,
+    #[serde(default)]
     pub description: String,
+    #[serde(default)]
     pub categories: Vec<String>,
+    #[serde(default)]
     pub logo: String,
     /// Empty string when the API returns null / empty.
+    #[serde(default)]
     pub location: String,
     /// Empty string when the API returns null / empty.
+    #[serde(default)]
     pub address: String,
 }
 
@@ -154,6 +160,97 @@ impl Client {
             Status::Pending => EnrichmentStatus::Pending,
             Status::Failed => EnrichmentStatus::Failed,
         })
+    }
+
+    // ── downloadEnrichmentCollection ──────────────────────────────────────────
+
+    /// Download and unpack an enrichment collection archive (`.tar.gz`) from a bulk job.
+    ///
+    /// Performs an HTTP GET request to `download_url` with `Authorization: Bearer <token>`
+    /// and `Accept: application/gzip`, decompresses the `.tar.gz` archive using
+    /// [`flate2::read::GzDecoder`], iterates tar entries with [`tar::Archive`], and parses
+    /// each `.json` file entry with [`serde_json::from_reader`] into an [`EnrichmentResponse`].
+    pub async fn download_enrichment_collection(
+        &self,
+        download_url: &str,
+    ) -> Result<Vec<EnrichmentResponse>, ClientError> {
+        let url = if download_url.starts_with("http://") || download_url.starts_with("https://") {
+            download_url.to_string()
+        } else {
+            format!(
+                "{}/{}",
+                self.configuration.base_path.trim_end_matches('/'),
+                download_url.trim_start_matches('/')
+            )
+        };
+
+        let mut req_builder = self.configuration.client.get(&url);
+
+        if let Some(ref user_agent) = self.configuration.user_agent {
+            req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent);
+        }
+        if let Some(ref token) = self.configuration.bearer_access_token {
+            req_builder = req_builder.bearer_auth(token);
+        }
+        req_builder = req_builder.header(reqwest::header::ACCEPT, "application/gzip");
+
+        let resp = req_builder.send().await.map_err(|e| ClientError {
+            code: e.status().map(|s| s.as_u16()).unwrap_or(0),
+            message: e.to_string(),
+        })?;
+
+        let status = resp.status();
+        if status.is_client_error() || status.is_server_error() {
+            let message = resp.text().await.unwrap_or_default();
+            return Err(ClientError {
+                code: status.as_u16(),
+                message,
+            });
+        }
+
+        let bytes = resp.bytes().await.map_err(|e| ClientError {
+            code: e.status().map(|s| s.as_u16()).unwrap_or(0),
+            message: e.to_string(),
+        })?;
+
+        let gz_decoder = flate2::read::GzDecoder::new(std::io::Cursor::new(bytes));
+        let mut archive = tar::Archive::new(gz_decoder);
+
+        let entries = archive.entries().map_err(|e| ClientError {
+            code: 0,
+            message: format!("Failed to read tar archive: {}", e),
+        })?;
+
+        let mut results = Vec::new();
+        for entry_res in entries {
+            let mut entry = entry_res.map_err(|e| ClientError {
+                code: 0,
+                message: format!("Failed to read tar entry: {}", e),
+            })?;
+
+            let is_file = entry.header().entry_type().is_file();
+            let path_buf = entry
+                .path()
+                .map_err(|e| ClientError {
+                    code: 0,
+                    message: format!("Failed to read tar entry path: {}", e),
+                })?
+                .into_owned();
+
+            if is_file {
+                if let Some(ext) = path_buf.extension() {
+                    if ext == "json" {
+                        let item: EnrichmentResponse = serde_json::from_reader(&mut entry).map_err(|e| ClientError {
+                            code: 0,
+                            message: format!("Failed to parse JSON from {}: {}", path_buf.display(), e),
+                        })?;
+                        results.push(item);
+                    }
+                }
+            }
+        }
+
+        Ok(results)
     }
 }
 

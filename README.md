@@ -226,6 +226,50 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ---
 
+### 5. Bulk Results Download (`download_enrichment_collection`)
+
+Once a bulk enrichment job transitions to `EnrichmentStatus::Ready`, download and decompress the `.tar.gz` archive containing individual JSON enrichment records directly into a vector of [`EnrichmentResponse`]:
+
+```rust
+use xyo_sdk::client::{Client, EnrichmentRequest};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let api_token = std::env::var("XYO_API_TOKEN").unwrap_or_else(|_| "your-bearer-token".to_string());
+    let client = Client::new(api_token, None);
+
+    let batch = vec![
+        EnrichmentRequest {
+            content: "COSTA PICKUP".to_string(),
+            country_code: "GB".to_string(),
+        },
+        EnrichmentRequest {
+            content: "UBER TRIP".to_string(),
+            country_code: "US".to_string(),
+        },
+    ];
+
+    let collection = client.enrich_transactions(batch, None).await?;
+    println!("Bulk Job ID: {}", collection.id);
+
+    // After polling get_enrichment_status until EnrichmentStatus::Ready:
+    let results = client.download_enrichment_collection(&collection.link).await?;
+
+    for item in &results {
+        println!("--- Enriched Transaction ---");
+        println!("Merchant:    {}", item.merchant);
+        println!("Description: {}", item.description);
+        println!("Categories:  {:?}", item.categories);
+        println!("Location:    {}", item.location);
+        println!("Address:     {}", item.address);
+    }
+
+    Ok(())
+}
+```
+
+---
+
 ## 🛡 Structured Error Handling (`ClientError`)
 
 Every SDK method returns a `Result<T, ClientError>`. The `ClientError` struct provides explicit numeric HTTP status codes along with actionable server diagnostic messages:

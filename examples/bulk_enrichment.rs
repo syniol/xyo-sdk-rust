@@ -39,6 +39,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         match status {
             EnrichmentStatus::Ready => {
                 println!("Job is READY! Results archive available at: {}", job.link);
+                println!("Downloading and unpacking enrichment collection results...");
+                let results = client.download_enrichment_collection(&job.link).await?;
+                println!("Downloaded {} enriched records:", results.len());
+                for (i, res) in results.iter().enumerate() {
+                    println!("  [{i}] Merchant: {} ({})", res.merchant, res.description);
+                }
                 break;
             }
             EnrichmentStatus::Pending => {
@@ -53,3 +59,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
