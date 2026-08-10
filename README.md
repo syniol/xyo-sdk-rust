@@ -361,7 +361,7 @@ cargo run --example error_handling
 ## 📞 Enterprise Support
 
 - **Developer Dashboard**: [https://xyo.financial/dashboard](https://xyo.financial/dashboard)
-- **Technical Support**: [support@xyo.financial](mailto:support@xyo.financial)
+- **Technical Support**: [support@syniol.com](mailto:support@syniol.com)
 - **Maintainer**: [Syniol Limited](https://syniol.com)
 
 ---
