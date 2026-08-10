@@ -34,6 +34,7 @@ Thank you for contributing to the **XYO Financial Rust SDK** (`xyo-sdk`). This d
    - [Conventional Commits](#conventional-commits)
    - [PR Submission Checklist](#pr-submission-checklist)
 7. [Release & Versioning Process](#7-release--versioning-process)
+8. [License](#8-license)
 
 ---
 
@@ -381,3 +382,10 @@ The XYO Financial Rust SDK follows [Semantic Versioning (SemVer)](https://semver
    git push origin v2.0.0
    ```
 6. The CI/CD pipeline triggers automated testing, builds the release artifacts, and publishes the crate to [crates.io](https://crates.io/crates/xyo-sdk).
+
+---
+
+## 8. License
+
+By contributing to the XYO Financial Rust SDK, you agree that your contributions will be licensed under the **Apache License, Version 2.0** (`Apache-2.0`). See the [LICENSE](LICENSE) file for details.
+

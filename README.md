@@ -12,7 +12,7 @@
     <a href="https://github.com/xyo-financial/sdk-rust/actions/workflows/makefile.yml"><img src="https://github.com/xyo-financial/sdk-rust/actions/workflows/makefile.yml/badge.svg?branch=main" alt="CI Build Pipeline" /></a>
     <img src="https://img.shields.io/badge/Rust-2021_Edition-orange?logo=rust&logoColor=white" alt="Rust Edition" />
     <img src="https://img.shields.io/badge/Runtime-Tokio_Async-blueviolet" alt="Tokio Async" />
-    <img src="https://img.shields.io/badge/License-BSD_3--Clause-blue.svg" alt="License" />
+    <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License" />
 </p>
 
 ---
@@ -368,6 +368,6 @@ cargo run --example error_handling
 
 ## 📄 License
 
-This project is licensed under the **BSD 3-Clause License** - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **Apache License, Version 2.0** - see the [LICENSE](LICENSE) file for details.
 
 Copyright &copy; 2026 Syniol Limited. All rights reserved.
