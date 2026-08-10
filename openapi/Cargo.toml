@@ -21,3 +21,10 @@ reqwest = { version = "0.11.24", default-features = false, features = ["json", "
 default = ["rustls-tls"]
 native-tls = ["reqwest/native-tls"]
 rustls-tls = ["reqwest/rustls-tls"]
+
+[lints.clippy]
+all = { level = "allow", priority = -1 }
+
+[lints.rust]
+warnings = { level = "allow", priority = -1 }
+
