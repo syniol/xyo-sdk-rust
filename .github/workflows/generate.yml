@@ -1,19 +1,32 @@
 name: Regenerate Rust OpenAPI Client
 
 on:
-  push:
-    paths:
-      - 'specs/openapi.yml'
+  repository_dispatch:
+    types: [spec_tagged, spec_updated]
   workflow_dispatch:
+    inputs:
+      spec_tag:
+        description: 'Tag or branch in xyo-financial/specs to generate from'
+        required: false
+        default: 'main'
 
 jobs:
-  generate:
+  regenerate:
     name: Generate OpenAPI Rust client
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
-      - name: Checkout repository
+      - name: Checkout SDK repository
         uses: actions/checkout@v4
+
+      - name: Checkout OpenAPI specification
+        uses: actions/checkout@v4
+        with:
+          repository: xyo-financial/specs
+          ref: ${{ github.event.client_payload.tag || inputs.spec_tag || 'main' }}
+          path: specs
 
       - name: Set up Node.js (for openapi-generator-cli)
         uses: actions/setup-node@v4
@@ -28,15 +41,28 @@ jobs:
           npx -y @openapitools/openapi-generator-cli generate \
             -i specs/openapi.yml \
             -g rust \
-            -o rust/openapi \
-            --additional-properties=packageName=xyo-sdk,packageVersion=2.0.0
+            -o openapi \
+            --additional-properties=packageName=openapi-client,packageVersion=2.0.0 \
+            --global-property apiTests=false,modelTests=false,apiDocs=false,modelDocs=false
+
+          # Remove generator noise and scaffolding files
+          rm -f openapi/git_push.sh \
+                openapi/.travis.yml \
+                openapi/README.md \
+                openapi/.gitignore
+          rm -rf openapi/docs \
+                 openapi/.openapi-generator
+
+          # Clean up specs checkout so it is not committed
+          rm -rf specs
 
       - name: Build workspace to verify compilation
-        working-directory: rust
-        run: cargo build
+        run: |
+          cargo check
+          cargo test
 
       - name: Commit regenerated client
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "chore(rust): regenerate OpenAPI client from updated spec"
-          file_pattern: "rust/openapi/**"
+          commit_message: "chore(rust): regenerate OpenAPI client from spec ${{ github.event.client_payload.tag || inputs.spec_tag || 'latest' }}"
+          file_pattern: "openapi/**"
