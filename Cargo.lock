@@ -717,20 +717,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
-name = "openapi-client"
-version = "2.0.0"
-dependencies = [
- "getrandom 0.2.15",
- "idna",
- "indexmap",
- "reqwest",
- "serde",
- "serde_json",
- "serde_repr",
- "url",
-]
-
-[[package]]
 name = "openssl"
 version = "0.10.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1630,17 +1616,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "xyo-openapi-client"
+version = "2.0.0"
+dependencies = [
+ "getrandom 0.2.15",
+ "idna",
+ "indexmap",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "url",
+]
+
+[[package]]
 name = "xyo-sdk"
 version = "2.0.0"
 dependencies = [
  "flate2",
- "openapi-client",
  "reqwest",
  "serde",
  "serde_json",
  "tar",
  "tokio",
  "wiremock",
+ "xyo-openapi-client",
 ]
 
 [[package]]

@@ -61,7 +61,7 @@ The XYO Financial Rust SDK is engineered with a strict **Two-Layer Architecture*
                                      ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │           Generated Layer (`openapi/` - READ-ONLY & IMMUTABLE)          │
-│  - Workspace Member: `openapi-client` (v2.0.0)                          │
+│  - Workspace Member: `xyo-openapi-client` (v2.0.0)                      │
 │  - Auto-generated via `@openapitools/openapi-generator-cli`             │
 │  - Canonical Source: `xyo-financial/specs` (`openapi.yml`)              │
 │  - Low-level APIs: `openapi/src/apis/enrichment_api.rs`                 │
@@ -74,7 +74,7 @@ The XYO Financial Rust SDK is engineered with a strict **Two-Layer Architecture*
 ### Generated Layer (`openapi/`) - Read-Only & Immutable
 
 - **Location**: `openapi/`
-- **Workspace Package**: `openapi-client`
+- **Workspace Package**: `xyo-openapi-client`
 - **Origin**: Automatically synthesized from the canonical OpenAPI 3.0/3.1 specification maintained upstream in [`xyo-financial/specs`](https://github.com/xyo-financial/specs).
 - **Contents**:
   - `openapi/src/apis/`: Low-level HTTP endpoint bindings (e.g., `enrichment_api.rs`), request dispatchers, and configuration structures (`configuration.rs`).
@@ -182,7 +182,7 @@ npx -y @openapitools/openapi-generator-cli generate \
   -i ../specs/openapi.yml \
   -g rust \
   -o ./openapi \
-  --additional-properties=packageName=openapi-client,packageVersion=2.0.0 \
+  --additional-properties=packageName=xyo-openapi-client,packageVersion=2.0.0 \
   --global-property apiTests=false,modelTests=false,apiDocs=false,modelDocs=false
 ```
 
@@ -207,7 +207,7 @@ The root `Cargo.toml` manages `openapi` as a workspace member:
 workspace = { members = ["openapi"], exclude = ["example"] }
 
 [dependencies]
-openapi-client = { version = "2.0.0", path = "openapi" }
+xyo-openapi-client = { version = "2.0.0", path = "openapi" }
 tokio = { version = "=1.38.0", features = ["rt-multi-thread", "macros"] }
 ```
 
@@ -244,7 +244,7 @@ Every contribution must pass all institutional quality gates before being approv
 
 ### 1. `cargo check` (Compilation Verification)
 
-Verifies that the entire workspace, including the generated `openapi-client` crate and the `xyo-sdk` wrapper crate, compiles cleanly without warnings or missing dependencies.
+Verifies that the entire workspace, including the generated `xyo-openapi-client` crate and the `xyo-sdk` wrapper crate, compiles cleanly without warnings or missing dependencies.
 
 ```bash
 cargo check

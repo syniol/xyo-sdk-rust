@@ -1,5 +1,5 @@
 [package]
-name = "openapi-client"
+name = "xyo-openapi-client"
 version = "2.0.0"
 authors = ["OpenAPI Generator team and contributors"]
 description = "RESTful API for enriching financial transactions."

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🚀 Version Bump
 - **xyo-sdk**: Incremented version to `2.0.0` in `Cargo.toml`.
-- **openapi-client**: Incremented version to `2.0.0` in `openapi/Cargo.toml` and updated workspace dependency in root `Cargo.toml`.
+- **xyo-openapi-client**: Package renamed to `xyo-openapi-client` (v2.0.0) in `openapi/Cargo.toml` and updated workspace dependency in root `Cargo.toml`.
 - **Dependencies**: Updated `xyo-sdk` dependency to `2.0.0` in `example/Cargo.toml`.
 - **Documentation**: Updated installation code snippet in `README.md` and generator properties in `CONTRIBUTING.md`.
 

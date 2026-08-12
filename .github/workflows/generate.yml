@@ -42,7 +42,7 @@ jobs:
             -i specs/openapi.yml \
             -g rust \
             -o openapi \
-            --additional-properties=packageName=openapi-client,packageVersion=2.0.0 \
+            --additional-properties=packageName=xyo-openapi-client,packageVersion=2.0.0 \
             --global-property apiTests=false,modelTests=false,apiDocs=false,modelDocs=false
 
           # Remove generator noise and scaffolding files

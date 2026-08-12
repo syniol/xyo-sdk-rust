@@ -12,9 +12,9 @@
 //! }
 //! ```
 
-use openapi_client::apis::configuration::Configuration;
-use openapi_client::apis::enrichment_api;
-use openapi_client::models::{EnrichmentRequest as ApiEnrichmentRequest, EnrichTransactionsRequestInner};
+use xyo_openapi_client::apis::configuration::Configuration;
+use xyo_openapi_client::apis::enrichment_api;
+use xyo_openapi_client::models::{EnrichmentRequest as ApiEnrichmentRequest, EnrichTransactionsRequestInner};
 use serde::{Deserialize, Serialize};
 
 use crate::error::ClientError;
@@ -154,7 +154,7 @@ impl Client {
             .map_err(map_error)?;
 
 
-        use openapi_client::models::enrichment_collection_status_response::Status;
+        use xyo_openapi_client::models::enrichment_collection_status_response::Status;
         Ok(match resp.status {
             Status::Ready => EnrichmentStatus::Ready,
             Status::Pending => EnrichmentStatus::Pending,
@@ -256,21 +256,21 @@ impl Client {
 
 // ── Error mapping ─────────────────────────────────────────────────────────────
 
-fn map_error<T: std::fmt::Debug>(err: openapi_client::apis::Error<T>) -> ClientError {
+fn map_error<T: std::fmt::Debug>(err: xyo_openapi_client::apis::Error<T>) -> ClientError {
     match err {
-        openapi_client::apis::Error::ResponseError(rc) => ClientError {
+        xyo_openapi_client::apis::Error::ResponseError(rc) => ClientError {
             code: rc.status.as_u16(),
             message: rc.content,
         },
-        openapi_client::apis::Error::Reqwest(e) => ClientError {
+        xyo_openapi_client::apis::Error::Reqwest(e) => ClientError {
             code: e.status().map(|s| s.as_u16()).unwrap_or(0),
             message: e.to_string(),
         },
-        openapi_client::apis::Error::Serde(e) => ClientError {
+        xyo_openapi_client::apis::Error::Serde(e) => ClientError {
             code: 0,
             message: e.to_string(),
         },
-        openapi_client::apis::Error::Io(e) => ClientError {
+        xyo_openapi_client::apis::Error::Io(e) => ClientError {
             code: 0,
             message: e.to_string(),
         },
@@ -280,7 +280,7 @@ fn map_error<T: std::fmt::Debug>(err: openapi_client::apis::Error<T>) -> ClientE
 #[cfg(test)]
 mod tests {
     use super::*;
-    use openapi_client::apis::ResponseContent;
+    use xyo_openapi_client::apis::ResponseContent;
 
     #[test]
     fn test_client_new_default_base_url() {
@@ -400,8 +400,8 @@ mod tests {
 
     #[test]
     fn test_map_error_response_error() {
-        let err: openapi_client::apis::Error<()> =
-            openapi_client::apis::Error::ResponseError(ResponseContent {
+        let err: xyo_openapi_client::apis::Error<()> =
+            xyo_openapi_client::apis::Error::ResponseError(ResponseContent {
                 status: reqwest::StatusCode::FORBIDDEN,
                 content: "Forbidden action".to_string(),
                 entity: None,
@@ -415,7 +415,7 @@ mod tests {
     #[test]
     fn test_map_error_serde() {
         let serde_err: serde_json::Error = serde_json::from_str::<i32>("not an integer").unwrap_err();
-        let err: openapi_client::apis::Error<()> = openapi_client::apis::Error::Serde(serde_err);
+        let err: xyo_openapi_client::apis::Error<()> = xyo_openapi_client::apis::Error::Serde(serde_err);
 
         let client_err = map_error(err);
         assert_eq!(client_err.code, 0);
@@ -425,7 +425,7 @@ mod tests {
     #[test]
     fn test_map_error_io() {
         let io_err = std::io::Error::new(std::io::ErrorKind::ConnectionReset, "connection reset");
-        let err: openapi_client::apis::Error<()> = openapi_client::apis::Error::Io(io_err);
+        let err: xyo_openapi_client::apis::Error<()> = xyo_openapi_client::apis::Error::Io(io_err);
 
         let client_err = map_error(err);
         assert_eq!(client_err.code, 0);
