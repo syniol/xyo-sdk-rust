@@ -1,16 +1,18 @@
-use xyo_sdk::client;
-// use xyo_sdk::enrichment::Enrichment;
-// use xyo_sdk::enrichment::{Enrichment, EnrichmentRequest};
+use xyo_sdk::client::Client;
 
-fn main() {
-    let _ = client::new(client::ClientConfig {
-        api_key: String::from("YourAPIKeyFromXYO.FinancialDashboard"),
-    });
+#[tokio::main]
+async fn main() {
+    let client = Client::new("YourBearerTokenFromXYODashboard", None);
 
-    // client.enrich_transaction(&EnrichmentRequest {
-    //     content: String::from("Syniol AI Payment Enrichment Software"),
-    //     country_code: String::from("GB"),
-    // });
-    //
-    println!("Successfully imported XYO SDK");
+    println!("Initialized XYO SDK client successfully.");
+    match client.enrich_transaction("COSTA PICKUP", "GB").await {
+        Ok(resp) => {
+            println!("Enrichment Success: merchant={}", resp.merchant);
+        }
+        Err(err) => {
+            println!("Encountered expected response (HTTP {}): {}", err.code, err.message);
+        }
+    }
 }
+
+

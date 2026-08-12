@@ -2,7 +2,7 @@ name: Publish XYO SDK Package
 
 on:
   workflow_run:
-    workflows: [Publish XYO HTTP Package]
+    workflows: [Publish OpenAPI Package]
     types: [completed]
 
 jobs:
