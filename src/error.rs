@@ -13,6 +13,39 @@ impl std::fmt::Display for ClientError {
 
 impl std::error::Error for ClientError {}
 
+impl ClientError {
+    /// Returns true if this error represents an authentication or authorization failure (HTTP 401 or 403).
+    pub fn is_auth(&self) -> bool {
+        self.code == 401 || self.code == 403
+    }
+
+    /// Returns true if this error represents a rate limit or throttle (HTTP 429).
+    pub fn is_rate_limited(&self) -> bool {
+        self.code == 429
+    }
+
+    /// Returns true if this error represents a resource not found (HTTP 404).
+    pub fn is_not_found(&self) -> bool {
+        self.code == 404
+    }
+
+    /// Returns true if this error represents an internal server error (HTTP 5xx).
+    pub fn is_server_error(&self) -> bool {
+        (500..600).contains(&self.code)
+    }
+
+    /// Returns true if the operation is transient and safe to retry.
+    pub fn is_retryable(&self) -> bool {
+        self.is_rate_limited()
+            || self.is_server_error()
+            || (self.code == 0
+                && (self.message.to_ascii_lowercase().contains("timed out")
+                    || self.message.to_ascii_lowercase().contains("timeout")
+                    || self.message.to_ascii_lowercase().contains("connection reset")
+                    || self.message.to_ascii_lowercase().contains("network stream error")))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -35,6 +68,43 @@ mod tests {
         let debug_str = format!("{:?}", err);
         assert!(debug_str.contains("500"));
         assert!(debug_str.contains("Internal Error"));
+    }
+
+    #[test]
+    fn test_client_error_classification_methods() {
+        let auth_err = ClientError {
+            code: 401,
+            message: "Unauthorized".to_string(),
+        };
+        assert!(auth_err.is_auth());
+        assert!(!auth_err.is_server_error());
+        assert!(!auth_err.is_retryable());
+
+        let forbidden_err = ClientError {
+            code: 403,
+            message: "Forbidden".to_string(),
+        };
+        assert!(forbidden_err.is_auth());
+
+        let rate_err = ClientError {
+            code: 429,
+            message: "Too Many Requests".to_string(),
+        };
+        assert!(rate_err.is_rate_limited());
+        assert!(rate_err.is_retryable());
+
+        let server_err = ClientError {
+            code: 503,
+            message: "Service Unavailable".to_string(),
+        };
+        assert!(server_err.is_server_error());
+        assert!(server_err.is_retryable());
+
+        let timeout_err = ClientError {
+            code: 0,
+            message: "operation timed out after 30s".to_string(),
+        };
+        assert!(timeout_err.is_retryable());
     }
 
     #[test]
