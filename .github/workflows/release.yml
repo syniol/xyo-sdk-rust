@@ -1,0 +1,109 @@
+name: Release Pipeline
+
+on:
+  workflow_run:
+    workflows: [Publish XYO SDK Package]
+    types: [completed]
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  verify-tag:
+    name: Verify Tag Integrity
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_branch }}
+
+      - name: Verify Tag is on main Branch
+        run: |
+          git branch -r --contains ${{ github.event.workflow_run.head_branch }} | grep -E "origin/main" || {
+            echo "Error: Tag must be pushed from the main branch."
+            exit 1;
+          }
+
+  test:
+    name: Run Tests
+    needs: verify-tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Run Tests
+        run: cargo test --verbose
+
+  publish-release:
+    name: Publish Release & Artifacts
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+
+      # 1. Archive creation
+      - name: Build Archive
+        run: |
+          git archive --format=tar.gz --prefix=sdk-rust-${{ github.event.workflow_run.head_branch }}/ -o sdk-rust-${{ github.event.workflow_run.head_branch }}.tar.gz HEAD
+
+      # 2. Generate Checksums
+      - name: Generate SHA-256 Checksum
+        run: sha256sum sdk-rust-${{ github.event.workflow_run.head_branch }}.tar.gz > sdk-rust-${{ github.event.workflow_run.head_branch }}.tar.gz.sha256
+
+      # 3. Generate SBOM (Software Bill of Materials)
+      - name: Generate SPDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          format: 'spdx-json'
+          output-file: 'sdk-rust-${{ github.event.workflow_run.head_branch }}.spdx.json'
+
+      # 4. Generate GitHub Attestation (Provenance & Integrity signatures)
+      - name: Generate Artifact Attestation
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: 'sdk-rust-${{ github.event.workflow_run.head_branch }}.tar.gz'
+
+      # 5. Create GitHub Release with Assets
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.workflow_run.head_branch }}
+          files: |
+            sdk-rust-${{ github.event.workflow_run.head_branch }}.tar.gz
+            sdk-rust-${{ github.event.workflow_run.head_branch }}.tar.gz.sha256
+            sdk-rust-${{ github.event.workflow_run.head_branch }}.spdx.json
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+
+  verify-example:
+    name: Verify Example App
+    needs: publish-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Run Example Application
+        run: |
+          cd example
+          cargo run
