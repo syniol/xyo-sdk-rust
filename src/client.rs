@@ -130,11 +130,8 @@ impl Default for DownloadSecurityPolicy {
     fn default() -> Self {
         Self {
             allowed_hosts: vec![
-                "amazonaws.com".to_string(),
-                "storage.googleapis.com".to_string(),
-                "blob.core.windows.net".to_string(),
-                "r2.cloudflarestorage.com".to_string(),
-                "xyo.financial".to_string(),
+                "api.xyo.financial".to_string(),
+                "download.xyo.financial".to_string(),
             ],
             allow_same_origin: true,
         }
@@ -433,10 +430,9 @@ impl Client {
 
         tracing::debug!(batch_size = items.len(), user = ?api_user, "enrich_transactions batch submission");
 
-        let x_api_user = api_user.map(serde_json::Value::from);
         let config = self.get_effective_config();
 
-        let resp = enrichment_api::enrich_transactions(&config, x_api_user, Some(items))
+        let resp = enrichment_api::enrich_transactions(&config, api_user, Some(items))
             .await
             .map_err(map_error)?;
 

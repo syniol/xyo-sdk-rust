@@ -82,7 +82,7 @@ pub async fn enrich_transaction(configuration: &configuration::Configuration, en
 }
 
 /// Enrich a collection of financial transactions asynchronously.
-pub async fn enrich_transactions(configuration: &configuration::Configuration, x_api_user: Option<serde_json::Value>, enrich_transactions_request_inner: Option<Vec<models::EnrichTransactionsRequestInner>>) -> Result<models::EnrichTransactionCollectionResponse, Error<EnrichTransactionsError>> {
+pub async fn enrich_transactions(configuration: &configuration::Configuration, x_api_user: Option<&str>, enrich_transactions_request_inner: Option<Vec<models::EnrichTransactionsRequestInner>>) -> Result<models::EnrichTransactionCollectionResponse, Error<EnrichTransactionsError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_header_x_api_user = x_api_user;
     let p_body_enrich_transactions_request_inner = enrich_transactions_request_inner;
@@ -94,11 +94,7 @@ pub async fn enrich_transactions(configuration: &configuration::Configuration, x
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
     if let Some(param_value) = p_header_x_api_user {
-        let val_str = match param_value {
-            serde_json::Value::String(s) => s,
-            v => v.to_string(),
-        };
-        req_builder = req_builder.header("x-api-user", val_str);
+        req_builder = req_builder.header("x-api-user", param_value);
     }
     if let Some(ref token) = configuration.bearer_access_token {
         req_builder = req_builder.bearer_auth(token.to_owned());

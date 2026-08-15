@@ -1,4 +1,4 @@
-use wiremock::matchers::{bearer_token, header, header_exists, method, path};
+use wiremock::matchers::{bearer_token, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 use xyo_sdk::client::{Client, DownloadSecurityPolicy, EnrichmentRequest, EnrichmentStatus};
 
@@ -235,7 +235,7 @@ async fn test_enrich_transactions_bulk_with_api_user() {
     Mock::given(method("POST"))
         .and(path("/v1/ai/finance/enrichment/transactions"))
         .and(bearer_token(token))
-        .and(header_exists("x-api-user"))
+        .and(header("x-api-user", "tenant-user-42"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "id": "job-bulk-999",
             "link": "https://api.xyo.financial/downloads/job-bulk-999.tar.gz"
