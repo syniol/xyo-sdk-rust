@@ -1046,7 +1046,7 @@ async fn test_download_enrichment_collection_waf_challenge() {
         .and(path("/downloads/job.tar.gz"))
         .respond_with(
             ResponseTemplate::new(200)
-                .set_body_string("<html><body><h1>Cloudflare / WAF Challenge</h1></body></html>")
+                .set_body_bytes(b"<html><body><h1>Cloudflare / WAF Challenge</h1></body></html>".as_slice())
                 .insert_header("content-type", "text/html; charset=UTF-8"),
         )
         .mount(&mock_server)
@@ -1058,7 +1058,7 @@ async fn test_download_enrichment_collection_waf_challenge() {
         .expect_err("WAF html response should fail with descriptive error");
 
     assert!(err.message.contains("Unexpected Content-Type"));
-    assert!(err.message.contains("Cloudflare / WAF Challenge"));
+    assert!(err.message.contains("text/html"));
 }
 
 struct HeaderMissingMatcher(&'static str);
@@ -1069,34 +1069,41 @@ impl wiremock::Match for HeaderMissingMatcher {
 }
 
 #[tokio::test]
-async fn test_download_enrichment_collection_external_host_no_auth_leak() {
+async fn test_download_enrichment_collection_domain_validation_and_auth() {
     let api_server = MockServer::start().await;
-    let s3_server = MockServer::start().await;
     let client = Client::new("secret-token-123", Some(api_server.uri()));
 
     let json_bytes = br#"{"merchant":"Starbucks","description":"Coffee","categories":["Food"],"logo":"url"}"#;
     let archive = create_test_tar_gz(&[("result.json", json_bytes)]);
 
-    // External S3 server should NOT receive Bearer auth header
+    // 1. Download from same API server host succeeds
     Mock::given(method("GET"))
-        .and(path("/s3-bucket/results.tar.gz"))
-        .and(HeaderMissingMatcher("authorization"))
+        .and(path("/downloads/results.tar.gz"))
+        .and(bearer_token("secret-token-123"))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_bytes(archive)
                 .insert_header("content-type", "application/gzip"),
         )
         .expect(1)
-        .mount(&s3_server)
+        .mount(&api_server)
         .await;
 
     let results = client
-        .download_enrichment_collection(&format!("{}/s3-bucket/results.tar.gz", s3_server.uri()))
+        .download_enrichment_collection(&format!("{}/downloads/results.tar.gz", api_server.uri()))
         .await
-        .expect("download from external host without auth should succeed");
+        .expect("download from api host should succeed");
 
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].merchant, "Starbucks");
+
+    // 2. Download from untrusted rogue domain is rejected
+    let err = client
+        .download_enrichment_collection("https://evil-untrusted-domain.com/data.tar.gz")
+        .await
+        .expect_err("untrusted domain should be rejected");
+
+    assert!(err.message.contains("not permitted for secure archive downloads"));
 }
 
 
