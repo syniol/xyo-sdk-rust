@@ -68,6 +68,19 @@ pub struct EnrichmentRequest {
 
 // ── Client ────────────────────────────────────────────────────────────────────
 
+pub const DEFAULT_MAX_TAR_ENTRIES: usize = 50_000;
+pub const DEFAULT_MAX_ENTRY_BYTES: u64 = 10 * 1024 * 1024; // 10 MiB
+pub const DEFAULT_MAX_ARCHIVE_BYTES: usize = 100 * 1024 * 1024; // 100 MiB
+
+/// Sanitizes tar entry name for error messages to prevent CWE-117 log injection.
+fn sanitize_entry_name(name: &str) -> String {
+    name.chars()
+        .map(|c| if c.is_control() { '_' } else { c })
+        .collect()
+}
+
+// ── Client ────────────────────────────────────────────────────────────────────
+
 /// Async client for the XYO Financial Transaction Enrichment API.
 pub struct Client {
     configuration: Configuration,
@@ -77,13 +90,14 @@ impl Client {
     /// Construct a new client.
     ///
     /// * `bearer_token` – the API Bearer token.
-    /// * `base_url`     – override the server URL (default: `https://api.xyo.financial`).
+    /// * `base_url`     – override the server URL (default: XYO_API_BASE_URL env or `https://api.xyo.financial`).
     pub fn new(bearer_token: impl Into<String>, base_url: Option<String>) -> Self {
         let mut configuration = Configuration::new();
         configuration.bearer_access_token = Some(bearer_token.into());
-        if let Some(url) = base_url {
-            configuration.base_path = url;
-        }
+        let effective_url = base_url
+            .or_else(|| std::env::var("XYO_API_BASE_URL").ok())
+            .unwrap_or_else(|| "https://api.xyo.financial".to_string());
+        configuration.base_path = effective_url.trim_end_matches('/').to_string();
         Client { configuration }
     }
 
@@ -153,7 +167,6 @@ impl Client {
             .await
             .map_err(map_error)?;
 
-
         use xyo_openapi_client::models::enrichment_collection_status_response::Status;
         Ok(match resp.status {
             Status::Ready => EnrichmentStatus::Ready,
@@ -166,33 +179,82 @@ impl Client {
 
     /// Download and unpack an enrichment collection archive (`.tar.gz`) from a bulk job.
     ///
-    /// Performs an HTTP GET request to `download_url` with `Authorization: Bearer <token>`
-    /// and `Accept: application/gzip`, decompresses the `.tar.gz` archive using
-    /// [`flate2::read::GzDecoder`], iterates tar entries with [`tar::Archive`], and parses
-    /// each `.json` file entry with [`serde_json::from_reader`] into an [`EnrichmentResponse`].
+    /// Performs an HTTP GET request to `download_url` with host-isolated Bearer authentication
+    /// and multi-MIME stream negotiation, decompresses the archive with decompression bomb
+    /// and Zip Slip defenses, and parses each `.json` file into an [`EnrichmentResponse`].
     pub async fn download_enrichment_collection(
         &self,
         download_url: &str,
     ) -> Result<Vec<EnrichmentResponse>, ClientError> {
-        let url = if download_url.starts_with("http://") || download_url.starts_with("https://") {
-            download_url.to_string()
+        let trimmed_url = download_url.trim();
+        if trimmed_url.is_empty() {
+            return Err(ClientError {
+                code: 0,
+                message: "download_url cannot be empty".to_string(),
+            });
+        }
+
+        let parsed_download_url = if let Ok(parsed) = url::Url::parse(trimmed_url) {
+            if parsed.scheme() == "http" || parsed.scheme() == "https" {
+                parsed
+            } else if !parsed.scheme().is_empty() && (trimmed_url.contains("://") || trimmed_url.starts_with("javascript:") || trimmed_url.starts_with("data:")) {
+                return Err(ClientError {
+                    code: 0,
+                    message: format!("Unsupported URL scheme {:?} (only http and https are permitted)", parsed.scheme()),
+                });
+            } else {
+                let base_clean = self.configuration.base_path.trim_end_matches('/');
+                let rel_clean = trimmed_url.trim_start_matches('/');
+                url::Url::parse(&format!("{}/{}", base_clean, rel_clean)).map_err(|e| ClientError {
+                    code: 0,
+                    message: format!("Invalid download URL: {}", e),
+                })?
+            }
         } else {
-            format!(
-                "{}/{}",
-                self.configuration.base_path.trim_end_matches('/'),
-                download_url.trim_start_matches('/')
-            )
+            let base_clean = self.configuration.base_path.trim_end_matches('/');
+            let rel_clean = trimmed_url.trim_start_matches('/');
+            url::Url::parse(&format!("{}/{}", base_clean, rel_clean)).map_err(|e| ClientError {
+                code: 0,
+                message: format!("Invalid download URL: {}", e),
+            })?
         };
 
-        let mut req_builder = self.configuration.client.get(&url);
+        let scheme = parsed_download_url.scheme();
+        if scheme != "http" && scheme != "https" {
+            return Err(ClientError {
+                code: 0,
+                message: format!("Unsupported URL scheme {:?} (only http and https are permitted)", scheme),
+            });
+        }
+
+        let mut req_builder = self.configuration.client.get(parsed_download_url.as_str());
 
         if let Some(ref user_agent) = self.configuration.user_agent {
             req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent);
         }
-        if let Some(ref token) = self.configuration.bearer_access_token {
-            req_builder = req_builder.bearer_auth(token);
+
+        // Only attach Authorization header if target host and port match configured API base URL (prevents token leakage)
+        let mut attach_auth = true;
+        if let Ok(base_url_parsed) = url::Url::parse(&self.configuration.base_path) {
+            if let (Some(down_host), Some(base_host)) = (parsed_download_url.host_str(), base_url_parsed.host_str()) {
+                let down_port = parsed_download_url.port_or_known_default();
+                let base_port = base_url_parsed.port_or_known_default();
+                if !down_host.eq_ignore_ascii_case(base_host) || down_port != base_port {
+                    attach_auth = false;
+                }
+            }
         }
-        req_builder = req_builder.header(reqwest::header::ACCEPT, "application/gzip");
+
+        if attach_auth {
+            if let Some(ref token) = self.configuration.bearer_access_token {
+                req_builder = req_builder.bearer_auth(token);
+            }
+        }
+
+        req_builder = req_builder.header(
+            reqwest::header::ACCEPT,
+            "application/gzip, application/x-tar, application/octet-stream;q=0.9, */*;q=0.8",
+        );
 
         let resp = req_builder.send().await.map_err(|e| ClientError {
             code: e.status().map(|s| s.as_u16()).unwrap_or(0),
@@ -208,10 +270,48 @@ impl Client {
             });
         }
 
+        // Validate Content-Type header to diagnose intermediate proxy/WAF challenge pages
+        let content_type = resp
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
+
+        if let Some(ref ct_str) = content_type {
+            let ct_lower = ct_str.to_lowercase();
+            if !ct_lower.contains("gzip")
+                && !ct_lower.contains("tar")
+                && !ct_lower.contains("octet-stream")
+                && !ct_lower.contains("binary")
+            {
+                let preview = resp.text().await.unwrap_or_default();
+                let preview_trimmed = if preview.len() > 512 {
+                    &preview[..512]
+                } else {
+                    &preview
+                };
+                return Err(ClientError {
+                    code: status.as_u16(),
+                    message: format!(
+                        "Unexpected Content-Type {:?} received when expecting binary archive (body preview: {})",
+                        ct_str,
+                        preview_trimmed.trim()
+                    ),
+                });
+            }
+        }
+
         let bytes = resp.bytes().await.map_err(|e| ClientError {
             code: e.status().map(|s| s.as_u16()).unwrap_or(0),
             message: e.to_string(),
         })?;
+
+        if bytes.len() > DEFAULT_MAX_ARCHIVE_BYTES {
+            return Err(ClientError {
+                code: 0,
+                message: format!("Compressed archive exceeded maximum allowed size of {} bytes", DEFAULT_MAX_ARCHIVE_BYTES),
+            });
+        }
 
         let gz_decoder = flate2::read::GzDecoder::new(std::io::Cursor::new(bytes));
         let mut archive = tar::Archive::new(gz_decoder);
@@ -222,11 +322,30 @@ impl Client {
         })?;
 
         let mut results = Vec::new();
+        let mut entry_count: usize = 0;
+
         for entry_res in entries {
+            entry_count += 1;
+            if entry_count > DEFAULT_MAX_TAR_ENTRIES {
+                return Err(ClientError {
+                    code: 0,
+                    message: format!("Archive contains too many entries (exceeded limit of {})", DEFAULT_MAX_TAR_ENTRIES),
+                });
+            }
+
             let mut entry = entry_res.map_err(|e| ClientError {
                 code: 0,
                 message: format!("Failed to read tar entry: {}", e),
             })?;
+
+            let entry_size = entry.header().size().unwrap_or(0);
+            if entry_size > DEFAULT_MAX_ENTRY_BYTES {
+                let name = entry.path().map(|p| p.display().to_string()).unwrap_or_default();
+                return Err(ClientError {
+                    code: 0,
+                    message: format!("Entry {:?} size ({} bytes) exceeds limit of {} bytes", sanitize_entry_name(&name), entry_size, DEFAULT_MAX_ENTRY_BYTES),
+                });
+            }
 
             let is_file = entry.header().entry_type().is_file();
             let path_buf = entry
@@ -237,12 +356,18 @@ impl Client {
                 })?
                 .into_owned();
 
+            // Zip-Slip and path traversal protection
+            let path_str = path_buf.to_string_lossy();
+            if path_str.contains("..") || path_str.starts_with('/') || path_str.starts_with('\\') {
+                continue;
+            }
+
             if is_file {
                 if let Some(ext) = path_buf.extension() {
                     if ext == "json" {
                         let item: EnrichmentResponse = serde_json::from_reader(&mut entry).map_err(|e| ClientError {
                             code: 0,
-                            message: format!("Failed to parse JSON from {}: {}", path_buf.display(), e),
+                            message: format!("Failed to parse JSON from {}: {}", sanitize_entry_name(&path_buf.display().to_string()), e),
                         })?;
                         results.push(item);
                     }
@@ -282,8 +407,12 @@ mod tests {
     use super::*;
     use xyo_openapi_client::apis::ResponseContent;
 
+    static ENV_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn test_client_new_default_base_url() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        std::env::remove_var("XYO_API_BASE_URL");
         let client = Client::new("my-token", None);
         assert_eq!(client.configuration.base_path, "https://api.xyo.financial");
         assert_eq!(
@@ -430,6 +559,22 @@ mod tests {
         let client_err = map_error(err);
         assert_eq!(client_err.code, 0);
         assert!(client_err.message.contains("connection reset"));
+    }
+
+    #[test]
+    fn test_sanitize_entry_name() {
+        let malicious = "test\r\nmalicious\x00entry\x1b[31m.json";
+        let sanitized = sanitize_entry_name(malicious);
+        assert_eq!(sanitized, "test__malicious_entry_[31m.json");
+    }
+
+    #[test]
+    fn test_client_new_env_fallback() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        std::env::set_var("XYO_API_BASE_URL", "https://env.api.xyo.financial");
+        let client = Client::new("test-token", None);
+        assert_eq!(client.configuration.base_path, "https://env.api.xyo.financial");
+        std::env::remove_var("XYO_API_BASE_URL");
     }
 }
 

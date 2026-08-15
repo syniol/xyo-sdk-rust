@@ -771,7 +771,6 @@ async fn test_download_enrichment_collection_success() {
     Mock::given(method("GET"))
         .and(path("/v1/ai/finance/enrichment/download/batch-999.tar.gz"))
         .and(bearer_token(token))
-        .and(header("accept", "application/gzip"))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_bytes(archive)
@@ -1019,6 +1018,85 @@ async fn test_download_enrichment_collection_transport_failure() {
 
     assert_eq!(err.code, 0);
     assert!(!err.message.is_empty());
+}
+
+#[tokio::test]
+async fn test_download_enrichment_collection_ssrf_protection() {
+    let client = Client::new("test-token", None);
+
+    let err1 = client
+        .download_enrichment_collection("file:///etc/passwd")
+        .await
+        .expect_err("file scheme should be rejected");
+    assert!(err1.message.contains("Unsupported URL scheme"));
+
+    let err2 = client
+        .download_enrichment_collection("ftp://example.com/archive.tar.gz")
+        .await
+        .expect_err("ftp scheme should be rejected");
+    assert!(err2.message.contains("Unsupported URL scheme"));
+}
+
+#[tokio::test]
+async fn test_download_enrichment_collection_waf_challenge() {
+    let mock_server = MockServer::start().await;
+    let client = Client::new("test-token", Some(mock_server.uri()));
+
+    Mock::given(method("GET"))
+        .and(path("/downloads/job.tar.gz"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string("<html><body><h1>Cloudflare / WAF Challenge</h1></body></html>")
+                .insert_header("content-type", "text/html; charset=UTF-8"),
+        )
+        .mount(&mock_server)
+        .await;
+
+    let err = client
+        .download_enrichment_collection(&format!("{}/downloads/job.tar.gz", mock_server.uri()))
+        .await
+        .expect_err("WAF html response should fail with descriptive error");
+
+    assert!(err.message.contains("Unexpected Content-Type"));
+    assert!(err.message.contains("Cloudflare / WAF Challenge"));
+}
+
+struct HeaderMissingMatcher(&'static str);
+impl wiremock::Match for HeaderMissingMatcher {
+    fn matches(&self, request: &wiremock::Request) -> bool {
+        !request.headers.contains_key(&wiremock::http::HeaderName::from_static(self.0))
+    }
+}
+
+#[tokio::test]
+async fn test_download_enrichment_collection_external_host_no_auth_leak() {
+    let api_server = MockServer::start().await;
+    let s3_server = MockServer::start().await;
+    let client = Client::new("secret-token-123", Some(api_server.uri()));
+
+    let json_bytes = br#"{"merchant":"Starbucks","description":"Coffee","categories":["Food"],"logo":"url"}"#;
+    let archive = create_test_tar_gz(&[("result.json", json_bytes)]);
+
+    // External S3 server should NOT receive Bearer auth header
+    Mock::given(method("GET"))
+        .and(path("/s3-bucket/results.tar.gz"))
+        .and(HeaderMissingMatcher("authorization"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_bytes(archive)
+                .insert_header("content-type", "application/gzip"),
+        )
+        .expect(1)
+        .mount(&s3_server)
+        .await;
+
+    let results = client
+        .download_enrichment_collection(&format!("{}/s3-bucket/results.tar.gz", s3_server.uri()))
+        .await
+        .expect("download from external host without auth should succeed");
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].merchant, "Starbucks");
 }
 
 
