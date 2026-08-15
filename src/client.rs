@@ -233,13 +233,23 @@ impl Client {
             req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent);
         }
 
-        // Only attach Authorization header if target host and port match configured API base URL (prevents token leakage)
+        // Validate permitted domain for secure archive download (API host or S3) and attach auth only for API host
         let mut attach_auth = true;
         if let Ok(base_url_parsed) = url::Url::parse(&self.configuration.base_path) {
             if let (Some(down_host), Some(base_host)) = (parsed_download_url.host_str(), base_url_parsed.host_str()) {
                 let down_port = parsed_download_url.port_or_known_default();
                 let base_port = base_url_parsed.port_or_known_default();
-                if !down_host.eq_ignore_ascii_case(base_host) || down_port != base_port {
+                let is_api_host = down_host.eq_ignore_ascii_case(base_host) && down_port == base_port;
+                let is_s3 = down_host.to_ascii_lowercase().ends_with(".amazonaws.com");
+
+                if !is_api_host && !is_s3 {
+                    return Err(ClientError {
+                        code: 0,
+                        message: format!("domain {:?} is not permitted for secure archive downloads", down_host),
+                    });
+                }
+
+                if !is_api_host {
                     attach_auth = false;
                 }
             }
@@ -284,18 +294,11 @@ impl Client {
                 && !ct_lower.contains("octet-stream")
                 && !ct_lower.contains("binary")
             {
-                let preview = resp.text().await.unwrap_or_default();
-                let preview_trimmed = if preview.len() > 512 {
-                    &preview[..512]
-                } else {
-                    &preview
-                };
                 return Err(ClientError {
                     code: status.as_u16(),
                     message: format!(
-                        "Unexpected Content-Type {:?} received when expecting binary archive (body preview: {})",
-                        ct_str,
-                        preview_trimmed.trim()
+                        "Unexpected Content-Type {:?} received when expecting binary archive",
+                        ct_str
                     ),
                 });
             }
