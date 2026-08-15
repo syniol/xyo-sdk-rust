@@ -390,7 +390,11 @@ impl Client {
         content: impl Into<String>,
         country_code: impl Into<String>,
     ) -> Result<EnrichmentResponse, ClientError> {
-        let body = ApiEnrichmentRequest::new(content.into(), country_code.into());
+        let content_str = content.into();
+        let country_str = country_code.into();
+        tracing::debug!(country = %country_str, "enrich_transaction executing");
+
+        let body = ApiEnrichmentRequest::new(content_str, country_str);
         let config = self.get_effective_config();
 
         let resp = enrichment_api::enrich_transaction(&config, Some(body))
@@ -427,6 +431,8 @@ impl Client {
             })
             .collect();
 
+        tracing::debug!(batch_size = items.len(), user = ?api_user, "enrich_transactions batch submission");
+
         let x_api_user = api_user.map(serde_json::Value::from);
         let config = self.get_effective_config();
 
@@ -449,6 +455,7 @@ impl Client {
         api_user: Option<&str>,
     ) -> Result<EnrichmentStatus, ClientError> {
         validate_api_user(api_user)?;
+        tracing::debug!(job_id = %id, user = ?api_user, "get_enrichment_status polling");
 
         let config = self.get_effective_config();
         let resp = enrichment_api::get_enrichment_status(&config, id, api_user)
