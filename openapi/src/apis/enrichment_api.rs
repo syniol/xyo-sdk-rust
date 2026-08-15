@@ -94,7 +94,11 @@ pub async fn enrich_transactions(configuration: &configuration::Configuration, x
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
     if let Some(param_value) = p_header_x_api_user {
-        req_builder = req_builder.header("x-api-user", param_value.to_string());
+        let val_str = match param_value {
+            serde_json::Value::String(s) => s,
+            v => v.to_string(),
+        };
+        req_builder = req_builder.header("x-api-user", val_str);
     }
     if let Some(ref token) = configuration.bearer_access_token {
         req_builder = req_builder.bearer_auth(token.to_owned());

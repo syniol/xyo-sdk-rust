@@ -1,6 +1,6 @@
 use wiremock::matchers::{bearer_token, header, header_exists, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
-use xyo_sdk::client::{Client, EnrichmentRequest, EnrichmentStatus};
+use xyo_sdk::client::{Client, DownloadSecurityPolicy, EnrichmentRequest, EnrichmentStatus};
 
 #[tokio::test]
 async fn test_client_new_configuration() {
@@ -1105,5 +1105,54 @@ async fn test_download_enrichment_collection_domain_validation_and_auth() {
 
     assert!(err.message.contains("not permitted for secure archive downloads"));
 }
+
+#[tokio::test]
+async fn test_client_builder_integration() {
+    let mock_server = MockServer::start().await;
+    let client = Client::builder()
+        .token("builder-token-xyz")
+        .base_url(mock_server.uri())
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .expect("builder should construct client");
+
+    Mock::given(method("POST"))
+        .and(path("/v1/ai/finance/enrichment/transaction"))
+        .and(bearer_token("builder-token-xyz"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "merchant": "Builder Corp",
+            "description": "Integration test",
+            "categories": ["Tech"],
+            "logo": null,
+            "location": null,
+            "address": null
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let resp = client
+        .enrich_transaction("BUILDER CORP", "US")
+        .await
+        .expect("enrich_transaction with builder client should succeed");
+
+    assert_eq!(resp.merchant, "Builder Corp");
+    assert_eq!(resp.logo, "");
+    assert_eq!(resp.location, "");
+    assert_eq!(resp.address, "");
+}
+
+#[tokio::test]
+async fn test_download_security_policy_custom_allowed_host() {
+    let policy = DownloadSecurityPolicy {
+        allowed_hosts: vec!["custom.storage.enterprise.io".to_string()],
+        allow_same_origin: true,
+    };
+
+    assert!(policy.is_allowed("custom.storage.enterprise.io", "api.xyo.financial"));
+    assert!(policy.is_allowed("subdomain.custom.storage.enterprise.io", "api.xyo.financial"));
+    assert!(policy.is_allowed("api.xyo.financial", "api.xyo.financial"));
+    assert!(!policy.is_allowed("rogue-server.io", "api.xyo.financial"));
+}
+
 
 

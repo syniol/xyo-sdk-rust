@@ -12,6 +12,7 @@
 //! }
 //! ```
 
+use std::time::Duration;
 use xyo_openapi_client::apis::configuration::Configuration;
 use xyo_openapi_client::apis::enrichment_api;
 use xyo_openapi_client::models::{EnrichmentRequest as ApiEnrichmentRequest, EnrichTransactionsRequestInner};
@@ -19,24 +20,34 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::ClientError;
 
+// ── Null-safe string deserialization ──────────────────────────────────────────
+
+fn deserialize_null_as_empty_string<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let opt = Option::<String>::deserialize(deserializer)?;
+    Ok(opt.unwrap_or_default())
+}
+
 // ── Re-exported response types ────────────────────────────────────────────────
 
 /// Response from a single-transaction enrichment.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EnrichmentResponse {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_null_as_empty_string")]
     pub merchant: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_null_as_empty_string")]
     pub description: String,
     #[serde(default)]
     pub categories: Vec<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_null_as_empty_string")]
     pub logo: String,
     /// Empty string when the API returns null / empty.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_null_as_empty_string")]
     pub location: String,
     /// Empty string when the API returns null / empty.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_null_as_empty_string")]
     pub address: String,
 }
 
@@ -76,7 +87,7 @@ impl EnrichmentRequest {
                 message: "request content must not be empty".to_string(),
             });
         }
-        if content.len() > 128 {
+        if content.chars().count() > 128 {
             return Err(ClientError {
                 code: 0,
                 message: "request content exceeds maximum length of 128 characters".to_string(),
@@ -89,7 +100,7 @@ impl EnrichmentRequest {
                 message: "request country_code must not be empty".to_string(),
             });
         }
-        if country.len() != 2 {
+        if country.chars().count() != 2 {
             return Err(ClientError {
                 code: 0,
                 message: "request country_code must be a 2-letter ISO 3166-1 alpha-2 code".to_string(),
@@ -99,11 +110,55 @@ impl EnrichmentRequest {
     }
 }
 
-// ── Client ────────────────────────────────────────────────────────────────────
+// ── Security Policy & Constants ───────────────────────────────────────────────
 
 pub const DEFAULT_MAX_TAR_ENTRIES: usize = 50_000;
 pub const DEFAULT_MAX_ENTRY_BYTES: u64 = 10 * 1024 * 1024; // 10 MiB
 pub const DEFAULT_MAX_ARCHIVE_BYTES: usize = 100 * 1024 * 1024; // 100 MiB
+pub const DEFAULT_USER_AGENT: &str = "xyo-sdk-rust/2.0.0";
+
+/// Security policy governing permitted hosts for archive downloads.
+#[derive(Debug, Clone)]
+pub struct DownloadSecurityPolicy {
+    /// List of explicitly allowed hostnames or domain suffixes.
+    pub allowed_hosts: Vec<String>,
+    /// Automatically allow downloading from the configured API base host.
+    pub allow_same_origin: bool,
+}
+
+impl Default for DownloadSecurityPolicy {
+    fn default() -> Self {
+        Self {
+            allowed_hosts: vec![
+                "amazonaws.com".to_string(),
+                "storage.googleapis.com".to_string(),
+                "blob.core.windows.net".to_string(),
+                "r2.cloudflarestorage.com".to_string(),
+                "xyo.financial".to_string(),
+            ],
+            allow_same_origin: true,
+        }
+    }
+}
+
+impl DownloadSecurityPolicy {
+    /// Checks whether `target_host` is permitted under this policy.
+    pub fn is_allowed(&self, target_host: &str, api_host: &str) -> bool {
+        let target_lower = target_host.to_ascii_lowercase();
+        if self.allow_same_origin && !api_host.is_empty() && target_lower.eq_ignore_ascii_case(api_host) {
+            return true;
+        }
+        for allowed in &self.allowed_hosts {
+            let allowed_lower = allowed.to_ascii_lowercase();
+            if target_lower == allowed_lower
+                || target_lower.ends_with(&format!(".{}", allowed_lower))
+            {
+                return true;
+            }
+        }
+        false
+    }
+}
 
 /// Sanitizes tar entry name for error messages to prevent CWE-117 log injection.
 fn sanitize_entry_name(name: &str) -> String {
@@ -126,6 +181,148 @@ fn validate_api_user(api_user: Option<&str>) -> Result<(), ClientError> {
 
 type TokenSupplier = std::sync::Arc<dyn Fn() -> String + Send + Sync>;
 
+// ── ClientBuilder ─────────────────────────────────────────────────────────────
+
+/// Builder for creating and customizing an async [`Client`].
+pub struct ClientBuilder {
+    bearer_token: Option<String>,
+    token_supplier: Option<TokenSupplier>,
+    base_url: Option<String>,
+    user_agent: Option<String>,
+    timeout: Option<Duration>,
+    connect_timeout: Option<Duration>,
+    download_policy: DownloadSecurityPolicy,
+    custom_http_client: Option<reqwest::Client>,
+}
+
+impl Default for ClientBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ClientBuilder {
+    /// Create a new builder with default configuration.
+    pub fn new() -> Self {
+        Self {
+            bearer_token: None,
+            token_supplier: None,
+            base_url: None,
+            user_agent: Some(DEFAULT_USER_AGENT.to_string()),
+            timeout: Some(Duration::from_secs(30)),
+            connect_timeout: Some(Duration::from_secs(10)),
+            download_policy: DownloadSecurityPolicy::default(),
+            custom_http_client: None,
+        }
+    }
+
+    /// Set static Bearer API token.
+    pub fn token(mut self, token: impl Into<String>) -> Self {
+        self.bearer_token = Some(token.into());
+        self
+    }
+
+    /// Set dynamic Bearer token rotation supplier.
+    pub fn token_supplier<F>(mut self, supplier: F) -> Self
+    where
+        F: Fn() -> String + Send + Sync + 'static,
+    {
+        self.token_supplier = Some(std::sync::Arc::new(supplier));
+        self
+    }
+
+    /// Override the API base URL.
+    pub fn base_url(mut self, base_url: impl Into<String>) -> Self {
+        self.base_url = Some(base_url.into());
+        self
+    }
+
+    /// Set custom User-Agent header string.
+    pub fn user_agent(mut self, user_agent: impl Into<String>) -> Self {
+        self.user_agent = Some(user_agent.into());
+        self
+    }
+
+    /// Set request timeout.
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
+    /// Set connect timeout.
+    pub fn connect_timeout(mut self, connect_timeout: Duration) -> Self {
+        self.connect_timeout = Some(connect_timeout);
+        self
+    }
+
+    /// Add an explicitly permitted host for archive downloads.
+    pub fn allow_download_host(mut self, host: impl Into<String>) -> Self {
+        self.download_policy.allowed_hosts.push(host.into());
+        self
+    }
+
+    /// Replace the entire archive download security policy.
+    pub fn download_policy(mut self, policy: DownloadSecurityPolicy) -> Self {
+        self.download_policy = policy;
+        self
+    }
+
+    /// Provide a custom pre-configured `reqwest::Client`.
+    pub fn custom_http_client(mut self, client: reqwest::Client) -> Self {
+        self.custom_http_client = Some(client);
+        self
+    }
+
+    /// Build the configured [`Client`].
+    pub fn build(self) -> Result<Client, ClientError> {
+        let http_client = if let Some(client) = self.custom_http_client {
+            client
+        } else {
+            let mut builder = reqwest::Client::builder();
+            if let Some(to) = self.timeout {
+                builder = builder.timeout(to);
+            }
+            if let Some(cto) = self.connect_timeout {
+                builder = builder.connect_timeout(cto);
+            }
+            builder.build().map_err(|e| ClientError {
+                code: 0,
+                message: format!("Failed to build HTTP client: {}", e),
+            })?
+        };
+
+        let mut configuration = Configuration::new();
+        configuration.client = http_client;
+        configuration.bearer_access_token = self.bearer_token;
+        configuration.user_agent = self.user_agent;
+
+        let effective_url = self
+            .base_url
+            .or_else(|| std::env::var("XYO_API_BASE_URL").ok())
+            .unwrap_or_else(|| "https://api.xyo.financial".to_string());
+        configuration.base_path = effective_url.trim_end_matches('/').to_string();
+
+        Ok(Client {
+            configuration,
+            token_supplier: self.token_supplier,
+            download_policy: self.download_policy,
+        })
+    }
+}
+
+impl std::fmt::Debug for ClientBuilder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClientBuilder")
+            .field("base_url", &self.base_url)
+            .field("bearer_token", &"[REDACTED]")
+            .field("user_agent", &self.user_agent)
+            .field("timeout", &self.timeout)
+            .field("connect_timeout", &self.connect_timeout)
+            .field("download_policy", &self.download_policy)
+            .finish()
+    }
+}
+
 // ── Client ────────────────────────────────────────────────────────────────────
 
 /// Async client for the XYO Financial Transaction Enrichment API.
@@ -133,24 +330,36 @@ type TokenSupplier = std::sync::Arc<dyn Fn() -> String + Send + Sync>;
 pub struct Client {
     configuration: Configuration,
     token_supplier: Option<TokenSupplier>,
+    download_policy: DownloadSecurityPolicy,
+}
+
+impl std::fmt::Debug for Client {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Client")
+            .field("base_url", &self.configuration.base_path)
+            .field("bearer_token", &"[REDACTED]")
+            .field("user_agent", &self.configuration.user_agent)
+            .field("download_policy", &self.download_policy)
+            .finish()
+    }
 }
 
 impl Client {
-    /// Construct a new client.
+    /// Construct a new client builder.
+    pub fn builder() -> ClientBuilder {
+        ClientBuilder::new()
+    }
+
+    /// Construct a new client with default settings.
     ///
     /// * `bearer_token` – the API Bearer token.
     /// * `base_url`     – override the server URL (default: XYO_API_BASE_URL env or `https://api.xyo.financial`).
     pub fn new(bearer_token: impl Into<String>, base_url: Option<String>) -> Self {
-        let mut configuration = Configuration::new();
-        configuration.bearer_access_token = Some(bearer_token.into());
-        let effective_url = base_url
-            .or_else(|| std::env::var("XYO_API_BASE_URL").ok())
-            .unwrap_or_else(|| "https://api.xyo.financial".to_string());
-        configuration.base_path = effective_url.trim_end_matches('/').to_string();
-        Client {
-            configuration,
-            token_supplier: None,
+        let mut builder = Client::builder().token(bearer_token);
+        if let Some(url) = base_url {
+            builder = builder.base_url(url);
         }
+        builder.build().expect("default Client build should not fail")
     }
 
     /// Construct a new client with dynamic token rotation supplier.
@@ -158,15 +367,11 @@ impl Client {
     where
         F: Fn() -> String + Send + Sync + 'static,
     {
-        let mut configuration = Configuration::new();
-        let effective_url = base_url
-            .or_else(|| std::env::var("XYO_API_BASE_URL").ok())
-            .unwrap_or_else(|| "https://api.xyo.financial".to_string());
-        configuration.base_path = effective_url.trim_end_matches('/').to_string();
-        Client {
-            configuration,
-            token_supplier: Some(std::sync::Arc::new(supplier)),
+        let mut builder = Client::builder().token_supplier(supplier);
+        if let Some(url) = base_url {
+            builder = builder.base_url(url);
         }
+        builder.build().expect("default Client build should not fail")
     }
 
     fn get_effective_config(&self) -> Configuration {
@@ -316,30 +521,38 @@ impl Client {
             req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent);
         }
 
-        // Validate permitted domain for secure archive download (API host or S3) and attach auth only for API host
-        let mut attach_auth = true;
-        if let Ok(base_url_parsed) = url::Url::parse(&self.configuration.base_path) {
-            if let (Some(down_host), Some(base_host)) = (parsed_download_url.host_str(), base_url_parsed.host_str()) {
+        // Validate permitted domain for secure archive download policy and attach auth only for same-origin API host
+        let mut attach_auth = false;
+        let down_host = parsed_download_url.host_str().unwrap_or("");
+        let base_url_parsed = url::Url::parse(&self.configuration.base_path).ok();
+        let api_host = base_url_parsed
+            .as_ref()
+            .and_then(|u| u.host_str())
+            .unwrap_or("");
+
+        if !self.download_policy.is_allowed(down_host, api_host) {
+            return Err(ClientError {
+                code: 0,
+                message: format!("domain {:?} is not permitted for secure archive downloads", down_host),
+            });
+        }
+
+        if let Some(ref base_parsed) = base_url_parsed {
+            if let Some(base_h) = base_parsed.host_str() {
                 let down_port = parsed_download_url.port_or_known_default();
-                let base_port = base_url_parsed.port_or_known_default();
-                let is_api_host = down_host.eq_ignore_ascii_case(base_host) && down_port == base_port;
-                let is_s3 = down_host.to_ascii_lowercase().ends_with(".amazonaws.com");
-
-                if !is_api_host && !is_s3 {
-                    return Err(ClientError {
-                        code: 0,
-                        message: format!("domain {:?} is not permitted for secure archive downloads", down_host),
-                    });
-                }
-
-                if !is_api_host {
-                    attach_auth = false;
+                let base_port = base_parsed.port_or_known_default();
+                if down_host.eq_ignore_ascii_case(base_h) && down_port == base_port {
+                    attach_auth = true;
                 }
             }
         }
 
         if attach_auth {
-            let current_token = self.token_supplier.as_ref().map(|s| s()).or_else(|| self.configuration.bearer_access_token.clone());
+            let current_token = self
+                .token_supplier
+                .as_ref()
+                .map(|s| s())
+                .or_else(|| self.configuration.bearer_access_token.clone());
             if let Some(ref token) = current_token {
                 req_builder = req_builder.bearer_auth(token);
             }
@@ -388,79 +601,113 @@ impl Client {
             }
         }
 
-        let bytes = resp.bytes().await.map_err(|e| ClientError {
-            code: e.status().map(|s| s.as_u16()).unwrap_or(0),
-            message: e.to_string(),
-        })?;
-
-        if bytes.len() > DEFAULT_MAX_ARCHIVE_BYTES {
-            return Err(ClientError {
-                code: 0,
-                message: format!("Compressed archive exceeded maximum allowed size of {} bytes", DEFAULT_MAX_ARCHIVE_BYTES),
-            });
+        // Early check for Content-Length header to prevent buffering oversized payloads
+        if let Some(content_length) = resp.content_length() {
+            if content_length > DEFAULT_MAX_ARCHIVE_BYTES as u64 {
+                return Err(ClientError {
+                    code: 0,
+                    message: format!(
+                        "Content-Length ({} bytes) exceeds maximum limit of {} bytes",
+                        content_length, DEFAULT_MAX_ARCHIVE_BYTES
+                    ),
+                });
+            }
         }
 
-        let gz_decoder = flate2::read::GzDecoder::new(std::io::Cursor::new(bytes));
-        let mut archive = tar::Archive::new(gz_decoder);
+        // Stream chunks into buffer with strict byte limit guard
+        let mut buffer = Vec::with_capacity(std::cmp::min(
+            resp.content_length().unwrap_or(0) as usize,
+            DEFAULT_MAX_ARCHIVE_BYTES,
+        ));
 
-        let entries = archive.entries().map_err(|e| ClientError {
-            code: 0,
-            message: format!("Failed to read tar archive: {}", e),
-        })?;
-
-        let mut results = Vec::new();
-        let mut entry_count: usize = 0;
-
-        for entry_res in entries {
-            entry_count += 1;
-            if entry_count > DEFAULT_MAX_TAR_ENTRIES {
+        let mut resp = resp;
+        while let Some(chunk) = resp.chunk().await.map_err(|e| ClientError {
+            code: e.status().map(|s| s.as_u16()).unwrap_or(0),
+            message: format!("Network stream error: {}", e),
+        })? {
+            if buffer.len() + chunk.len() > DEFAULT_MAX_ARCHIVE_BYTES {
                 return Err(ClientError {
                     code: 0,
-                    message: format!("Archive contains too many entries (exceeded limit of {})", DEFAULT_MAX_TAR_ENTRIES),
+                    message: format!(
+                        "Compressed archive exceeded maximum allowed size of {} bytes",
+                        DEFAULT_MAX_ARCHIVE_BYTES
+                    ),
                 });
             }
+            buffer.extend_from_slice(&chunk);
+        }
 
-            let mut entry = entry_res.map_err(|e| ClientError {
+        // Offload synchronous CPU-intensive gzip decompression, tar unpacking, and JSON deserialization to blocking threadpool
+        let results = tokio::task::spawn_blocking(move || -> Result<Vec<EnrichmentResponse>, ClientError> {
+            let gz_decoder = flate2::read::GzDecoder::new(std::io::Cursor::new(buffer));
+            let mut archive = tar::Archive::new(gz_decoder);
+
+            let entries = archive.entries().map_err(|e| ClientError {
                 code: 0,
-                message: format!("Failed to read tar entry: {}", e),
+                message: format!("Failed to read tar archive: {}", e),
             })?;
 
-            let entry_size = entry.header().size().unwrap_or(0);
-            if entry_size > DEFAULT_MAX_ENTRY_BYTES {
-                let name = entry.path().map(|p| p.display().to_string()).unwrap_or_default();
-                return Err(ClientError {
+            let mut results = Vec::new();
+            let mut entry_count: usize = 0;
+
+            for entry_res in entries {
+                entry_count += 1;
+                if entry_count > DEFAULT_MAX_TAR_ENTRIES {
+                    return Err(ClientError {
+                        code: 0,
+                        message: format!("Archive contains too many entries (exceeded limit of {})", DEFAULT_MAX_TAR_ENTRIES),
+                    });
+                }
+
+                let mut entry = entry_res.map_err(|e| ClientError {
                     code: 0,
-                    message: format!("Entry {:?} size ({} bytes) exceeds limit of {} bytes", sanitize_entry_name(&name), entry_size, DEFAULT_MAX_ENTRY_BYTES),
-                });
-            }
+                    message: format!("Failed to read tar entry: {}", e),
+                })?;
 
-            let is_file = entry.header().entry_type().is_file();
-            let path_buf = entry
-                .path()
-                .map_err(|e| ClientError {
-                    code: 0,
-                    message: format!("Failed to read tar entry path: {}", e),
-                })?
-                .into_owned();
+                let entry_size = entry.header().size().unwrap_or(0);
+                if entry_size > DEFAULT_MAX_ENTRY_BYTES {
+                    let name = entry.path().map(|p| p.display().to_string()).unwrap_or_default();
+                    return Err(ClientError {
+                        code: 0,
+                        message: format!("Entry {:?} size ({} bytes) exceeds limit of {} bytes", sanitize_entry_name(&name), entry_size, DEFAULT_MAX_ENTRY_BYTES),
+                    });
+                }
 
-            // Zip-Slip and path traversal protection
-            let path_str = path_buf.to_string_lossy();
-            if path_str.contains("..") || path_str.starts_with('/') || path_str.starts_with('\\') {
-                continue;
-            }
+                let is_file = entry.header().entry_type().is_file();
+                let path_buf = entry
+                    .path()
+                    .map_err(|e| ClientError {
+                        code: 0,
+                        message: format!("Failed to read tar entry path: {}", e),
+                    })?
+                    .into_owned();
 
-            if is_file {
-                if let Some(ext) = path_buf.extension() {
-                    if ext == "json" {
-                        let item: EnrichmentResponse = serde_json::from_reader(&mut entry).map_err(|e| ClientError {
-                            code: 0,
-                            message: format!("Failed to parse JSON from {}: {}", sanitize_entry_name(&path_buf.display().to_string()), e),
-                        })?;
-                        results.push(item);
+                // Zip-Slip and path traversal protection
+                let path_str = path_buf.to_string_lossy();
+                if path_str.contains("..") || path_str.starts_with('/') || path_str.starts_with('\\') {
+                    continue;
+                }
+
+                if is_file {
+                    if let Some(ext) = path_buf.extension() {
+                        if ext == "json" {
+                            let item: EnrichmentResponse = serde_json::from_reader(&mut entry).map_err(|e| ClientError {
+                                code: 0,
+                                message: format!("Failed to parse JSON from {}: {}", sanitize_entry_name(&path_buf.display().to_string()), e),
+                            })?;
+                            results.push(item);
+                        }
                     }
                 }
             }
-        }
+
+            Ok(results)
+        })
+        .await
+        .map_err(|join_err| ClientError {
+            code: 0,
+            message: format!("Decompression task failed: {}", join_err),
+        })??;
 
         Ok(results)
     }
@@ -540,26 +787,49 @@ mod tests {
     }
 
     #[test]
-    fn test_enrichment_response_serde() {
+    fn test_client_builder_customization() {
+        let client = Client::builder()
+            .token("custom-builder-token")
+            .base_url("https://custom.api.xyo.financial")
+            .user_agent("custom-app/1.0.0")
+            .timeout(Duration::from_secs(45))
+            .connect_timeout(Duration::from_secs(15))
+            .allow_download_host("custom-cdn.internal")
+            .build()
+            .expect("builder should succeed");
+
+        assert_eq!(client.configuration.base_path, "https://custom.api.xyo.financial");
+        assert_eq!(client.configuration.bearer_access_token, Some("custom-builder-token".to_string()));
+        assert_eq!(client.configuration.user_agent, Some("custom-app/1.0.0".to_string()));
+        assert!(client.download_policy.is_allowed("custom-cdn.internal", "custom.api.xyo.financial"));
+    }
+
+    #[test]
+    fn test_client_debug_token_redaction() {
+        let client = Client::new("super-secret-key-123", None);
+        let debug_str = format!("{:?}", client);
+        assert!(!debug_str.contains("super-secret-key-123"));
+        assert!(debug_str.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn test_enrichment_response_serde_with_nulls() {
         let json_str = r#"{
             "merchant": "Uber",
             "description": "Ridesharing service",
             "categories": ["Transportation", "Taxi"],
-            "logo": "data:image/png;base64,123",
-            "location": "San Francisco, CA",
-            "address": "1455 Market St"
+            "logo": null,
+            "location": null,
+            "address": null
         }"#;
 
         let parsed: EnrichmentResponse = serde_json::from_str(json_str).unwrap();
         assert_eq!(parsed.merchant, "Uber");
         assert_eq!(parsed.description, "Ridesharing service");
         assert_eq!(parsed.categories, vec!["Transportation", "Taxi"]);
-        assert_eq!(parsed.logo, "data:image/png;base64,123");
-        assert_eq!(parsed.location, "San Francisco, CA");
-        assert_eq!(parsed.address, "1455 Market St");
-
-        let serialized = serde_json::to_string(&parsed).unwrap();
-        assert!(serialized.contains("Uber"));
+        assert_eq!(parsed.logo, "");
+        assert_eq!(parsed.location, "");
+        assert_eq!(parsed.address, "");
     }
 
     #[test]
@@ -743,4 +1013,3 @@ mod tests {
         assert_eq!(cfg2.bearer_access_token, Some("rotated-key-2".to_string()));
     }
 }
-

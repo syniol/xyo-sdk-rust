@@ -11,11 +11,11 @@ edition = "2021"
 serde = { version = "^1.0", features = ["derive"] }
 serde_json = "1.0.143"
 serde_repr = "^0.1"
-url = "=2.5.0"
-idna = "=0.5.0"
-indexmap = "=2.2.6"
-getrandom = "=0.2.15"
-reqwest = { version = "0.11.24", default-features = false, features = ["json", "blocking", "rustls-tls"] }
+url = "2.5"
+idna = "0.5"
+indexmap = "2.2"
+getrandom = "0.2"
+reqwest = { version = "0.11", default-features = false, features = ["json", "blocking", "rustls-tls"] }
 
 [features]
 default = ["rustls-tls"]
