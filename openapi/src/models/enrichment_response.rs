@@ -11,25 +11,33 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
+fn deserialize_null_as_empty_string<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let opt = Option::<String>::deserialize(deserializer)?;
+    Ok(opt.unwrap_or_default())
+}
+
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct EnrichmentResponse {
     /// Merchant is the name of the merchant.
-    #[serde(rename = "merchant")]
+    #[serde(rename = "merchant", default, deserialize_with = "deserialize_null_as_empty_string")]
     pub merchant: String,
     /// Description is a brief description of the merchant.
-    #[serde(rename = "description")]
+    #[serde(rename = "description", default, deserialize_with = "deserialize_null_as_empty_string")]
     pub description: String,
     /// Categories lists categories fitting the description of the merchant.
-    #[serde(rename = "categories")]
+    #[serde(rename = "categories", default)]
     pub categories: Vec<String>,
     /// Logo is a base64-encoded PNG or JPEG representing the merchant logo.
-    #[serde(rename = "logo")]
+    #[serde(rename = "logo", default, deserialize_with = "deserialize_null_as_empty_string")]
     pub logo: String,
     /// Location describes the country and city. May be empty if the API returns null.
-    #[serde(rename = "location")]
+    #[serde(rename = "location", default, deserialize_with = "deserialize_null_as_empty_string")]
     pub location: String,
     /// Address describes the exact address of purchase. May be empty if the API returns null.
-    #[serde(rename = "address")]
+    #[serde(rename = "address", default, deserialize_with = "deserialize_null_as_empty_string")]
     pub address: String,
 }
 
