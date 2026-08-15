@@ -1639,6 +1639,7 @@ dependencies = [
  "serde_json",
  "tar",
  "tokio",
+ "url",
  "wiremock",
  "xyo-openapi-client",
 ]
