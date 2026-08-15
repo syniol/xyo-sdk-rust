@@ -66,6 +66,39 @@ pub struct EnrichmentRequest {
     pub country_code: String,
 }
 
+impl EnrichmentRequest {
+    /// Validate client-side field constraints before submission.
+    pub fn validate(&self) -> Result<(), ClientError> {
+        let content = self.content.trim();
+        if content.is_empty() {
+            return Err(ClientError {
+                code: 0,
+                message: "request content must not be empty".to_string(),
+            });
+        }
+        if content.len() > 128 {
+            return Err(ClientError {
+                code: 0,
+                message: "request content exceeds maximum length of 128 characters".to_string(),
+            });
+        }
+        let country = self.country_code.trim();
+        if country.is_empty() {
+            return Err(ClientError {
+                code: 0,
+                message: "request country_code must not be empty".to_string(),
+            });
+        }
+        if country.len() != 2 {
+            return Err(ClientError {
+                code: 0,
+                message: "request country_code must be a 2-letter ISO 3166-1 alpha-2 code".to_string(),
+            });
+        }
+        Ok(())
+    }
+}
+
 // ── Client ────────────────────────────────────────────────────────────────────
 
 pub const DEFAULT_MAX_TAR_ENTRIES: usize = 50_000;
@@ -79,11 +112,27 @@ fn sanitize_entry_name(name: &str) -> String {
         .collect()
 }
 
+fn validate_api_user(api_user: Option<&str>) -> Result<(), ClientError> {
+    if let Some(user) = api_user {
+        if user.contains('\r') || user.contains('\n') {
+            return Err(ClientError {
+                code: 0,
+                message: "api_user contains invalid CRLF characters".to_string(),
+            });
+        }
+    }
+    Ok(())
+}
+
+type TokenSupplier = std::sync::Arc<dyn Fn() -> String + Send + Sync>;
+
 // ── Client ────────────────────────────────────────────────────────────────────
 
 /// Async client for the XYO Financial Transaction Enrichment API.
+#[derive(Clone)]
 pub struct Client {
     configuration: Configuration,
+    token_supplier: Option<TokenSupplier>,
 }
 
 impl Client {
@@ -98,7 +147,34 @@ impl Client {
             .or_else(|| std::env::var("XYO_API_BASE_URL").ok())
             .unwrap_or_else(|| "https://api.xyo.financial".to_string());
         configuration.base_path = effective_url.trim_end_matches('/').to_string();
-        Client { configuration }
+        Client {
+            configuration,
+            token_supplier: None,
+        }
+    }
+
+    /// Construct a new client with dynamic token rotation supplier.
+    pub fn with_token_supplier<F>(supplier: F, base_url: Option<String>) -> Self
+    where
+        F: Fn() -> String + Send + Sync + 'static,
+    {
+        let mut configuration = Configuration::new();
+        let effective_url = base_url
+            .or_else(|| std::env::var("XYO_API_BASE_URL").ok())
+            .unwrap_or_else(|| "https://api.xyo.financial".to_string());
+        configuration.base_path = effective_url.trim_end_matches('/').to_string();
+        Client {
+            configuration,
+            token_supplier: Some(std::sync::Arc::new(supplier)),
+        }
+    }
+
+    fn get_effective_config(&self) -> Configuration {
+        let mut config = self.configuration.clone();
+        if let Some(ref supplier) = self.token_supplier {
+            config.bearer_access_token = Some(supplier());
+        }
+        config
     }
 
     // ── enrichTransaction ─────────────────────────────────────────────────────
@@ -110,8 +186,9 @@ impl Client {
         country_code: impl Into<String>,
     ) -> Result<EnrichmentResponse, ClientError> {
         let body = ApiEnrichmentRequest::new(content.into(), country_code.into());
+        let config = self.get_effective_config();
 
-        let resp = enrichment_api::enrich_transaction(&self.configuration, Some(body))
+        let resp = enrichment_api::enrich_transaction(&config, Some(body))
             .await
             .map_err(map_error)?;
 
@@ -135,6 +212,8 @@ impl Client {
         requests: impl IntoIterator<Item = EnrichmentRequest>,
         api_user: Option<&str>,
     ) -> Result<EnrichTransactionCollectionResponse, ClientError> {
+        validate_api_user(api_user)?;
+
         let items: Vec<EnrichTransactionsRequestInner> = requests
             .into_iter()
             .map(|r| EnrichTransactionsRequestInner {
@@ -144,8 +223,9 @@ impl Client {
             .collect();
 
         let x_api_user = api_user.map(serde_json::Value::from);
+        let config = self.get_effective_config();
 
-        let resp = enrichment_api::enrich_transactions(&self.configuration, x_api_user, Some(items))
+        let resp = enrichment_api::enrich_transactions(&config, x_api_user, Some(items))
             .await
             .map_err(map_error)?;
 
@@ -163,7 +243,10 @@ impl Client {
         id: &str,
         api_user: Option<&str>,
     ) -> Result<EnrichmentStatus, ClientError> {
-        let resp = enrichment_api::get_enrichment_status(&self.configuration, id, api_user)
+        validate_api_user(api_user)?;
+
+        let config = self.get_effective_config();
+        let resp = enrichment_api::get_enrichment_status(&config, id, api_user)
             .await
             .map_err(map_error)?;
 
@@ -256,7 +339,8 @@ impl Client {
         }
 
         if attach_auth {
-            if let Some(ref token) = self.configuration.bearer_access_token {
+            let current_token = self.token_supplier.as_ref().map(|s| s()).or_else(|| self.configuration.bearer_access_token.clone());
+            if let Some(ref token) = current_token {
                 req_builder = req_builder.bearer_auth(token);
             }
         }
@@ -578,6 +662,85 @@ mod tests {
         let client = Client::new("test-token", None);
         assert_eq!(client.configuration.base_path, "https://env.api.xyo.financial");
         std::env::remove_var("XYO_API_BASE_URL");
+    }
+
+    #[test]
+    fn test_enrichment_request_validate() {
+        let valid_req = EnrichmentRequest {
+            content: "COSTA COFFEE".to_string(),
+            country_code: "GB".to_string(),
+        };
+        assert!(valid_req.validate().is_ok());
+
+        let empty_content = EnrichmentRequest {
+            content: "".to_string(),
+            country_code: "GB".to_string(),
+        };
+        assert_eq!(
+            empty_content.validate().unwrap_err().message,
+            "request content must not be empty"
+        );
+
+        let long_content = EnrichmentRequest {
+            content: "A".repeat(129),
+            country_code: "GB".to_string(),
+        };
+        assert_eq!(
+            long_content.validate().unwrap_err().message,
+            "request content exceeds maximum length of 128 characters"
+        );
+
+        let empty_country = EnrichmentRequest {
+            content: "Valid".to_string(),
+            country_code: "".to_string(),
+        };
+        assert_eq!(
+            empty_country.validate().unwrap_err().message,
+            "request country_code must not be empty"
+        );
+
+        let invalid_country = EnrichmentRequest {
+            content: "Valid".to_string(),
+            country_code: "USA".to_string(),
+        };
+        assert_eq!(
+            invalid_country.validate().unwrap_err().message,
+            "request country_code must be a 2-letter ISO 3166-1 alpha-2 code"
+        );
+    }
+
+    #[test]
+    fn test_validate_api_user_crlf_rejection() {
+        assert!(validate_api_user(Some("valid-user-123")).is_ok());
+        assert!(validate_api_user(None).is_ok());
+
+        let crlf1 = validate_api_user(Some("user\r\ninjected-header: val"));
+        assert!(crlf1.is_err());
+        assert_eq!(
+            crlf1.unwrap_err().message,
+            "api_user contains invalid CRLF characters"
+        );
+
+        let crlf2 = validate_api_user(Some("user\ninjected-header: val"));
+        assert!(crlf2.is_err());
+    }
+
+    #[test]
+    fn test_client_with_token_supplier() {
+        let key_holder = std::sync::Arc::new(std::sync::Mutex::new("key-1".to_string()));
+        let key_clone = key_holder.clone();
+
+        let client = Client::with_token_supplier(
+            move || key_clone.lock().unwrap().clone(),
+            Some("https://api.xyo.financial".to_string()),
+        );
+
+        let cfg1 = client.get_effective_config();
+        assert_eq!(cfg1.bearer_access_token, Some("key-1".to_string()));
+
+        *key_holder.lock().unwrap() = "rotated-key-2".to_string();
+        let cfg2 = client.get_effective_config();
+        assert_eq!(cfg2.bearer_access_token, Some("rotated-key-2".to_string()));
     }
 }
 
