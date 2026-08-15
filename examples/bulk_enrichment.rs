@@ -5,7 +5,7 @@ use xyo_sdk::client::{Client, EnrichmentRequest, EnrichmentStatus};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let api_token = std::env::var("XYO_API_TOKEN").unwrap_or_else(|_| "your-bearer-token".to_string());
-    let client = Client::new(api_token, None);
+    let client = Client::new(api_token, None)?;
 
     // Prepare a batch of transactions to enrich
     let batch = vec![

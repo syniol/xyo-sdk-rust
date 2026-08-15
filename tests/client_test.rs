@@ -5,7 +5,7 @@ use xyo_sdk::client::{Client, DownloadSecurityPolicy, EnrichmentRequest, Enrichm
 #[tokio::test]
 async fn test_client_new_configuration() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("test-token-123", Some(mock_server.uri()));
+    let client = Client::new("test-token-123", Some(mock_server.uri())).unwrap();
 
     Mock::given(method("POST"))
         .and(path("/v1/ai/finance/enrichment/transaction"))
@@ -36,7 +36,7 @@ async fn test_client_new_configuration() {
 async fn test_enrich_transaction_success() {
     let mock_server = MockServer::start().await;
     let token = "xyo-secret-bearer-token";
-    let client = Client::new(token, Some(mock_server.uri()));
+    let client = Client::new(token, Some(mock_server.uri())).unwrap();
 
     Mock::given(method("POST"))
         .and(path("/v1/ai/finance/enrichment/transaction"))
@@ -69,7 +69,7 @@ async fn test_enrich_transaction_success() {
 #[tokio::test]
 async fn test_enrich_transaction_empty_optional_fields() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("test-token", Some(mock_server.uri()));
+    let client = Client::new("test-token", Some(mock_server.uri())).unwrap();
 
     Mock::given(method("POST"))
         .and(path("/v1/ai/finance/enrichment/transaction"))
@@ -97,7 +97,7 @@ async fn test_enrich_transaction_empty_optional_fields() {
 #[tokio::test]
 async fn test_enrich_transaction_400_bad_request() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("test-token", Some(mock_server.uri()));
+    let client = Client::new("test-token", Some(mock_server.uri())).unwrap();
 
     let error_body = serde_json::json!({
         "errors": [{
@@ -120,7 +120,7 @@ async fn test_enrich_transaction_400_bad_request() {
         .await;
 
     let err = client
-        .enrich_transaction("TEST CONTENT", "XYZ")
+        .enrich_transaction("TEST CONTENT", "ZZ")
         .await
         .expect_err("should return ClientError for 400");
 
@@ -131,7 +131,7 @@ async fn test_enrich_transaction_400_bad_request() {
 #[tokio::test]
 async fn test_enrich_transaction_401_unauthorized() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("invalid-token", Some(mock_server.uri()));
+    let client = Client::new("invalid-token", Some(mock_server.uri())).unwrap();
 
     let error_body = serde_json::json!({
         "errors": [{
@@ -165,7 +165,7 @@ async fn test_enrich_transaction_401_unauthorized() {
 #[tokio::test]
 async fn test_enrich_transaction_404_not_found() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("test-token", Some(mock_server.uri()));
+    let client = Client::new("test-token", Some(mock_server.uri())).unwrap();
 
     Mock::given(method("POST"))
         .and(path("/v1/ai/finance/enrichment/transaction"))
@@ -185,7 +185,7 @@ async fn test_enrich_transaction_404_not_found() {
 #[tokio::test]
 async fn test_enrich_transaction_422_unprocessable_entity() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("test-token", Some(mock_server.uri()));
+    let client = Client::new("test-token", Some(mock_server.uri())).unwrap();
 
     Mock::given(method("POST"))
         .and(path("/v1/ai/finance/enrichment/transaction"))
@@ -198,7 +198,7 @@ async fn test_enrich_transaction_422_unprocessable_entity() {
         .await;
 
     let err = client
-        .enrich_transaction("", "GB")
+        .enrich_transaction("UNPROCESSABLE TRANSACTION", "GB")
         .await
         .expect_err("should return ClientError for 422");
 
@@ -209,7 +209,7 @@ async fn test_enrich_transaction_422_unprocessable_entity() {
 #[tokio::test]
 async fn test_enrich_transaction_500_internal_server_error() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("test-token", Some(mock_server.uri()));
+    let client = Client::new("test-token", Some(mock_server.uri())).unwrap();
 
     Mock::given(method("POST"))
         .and(path("/v1/ai/finance/enrichment/transaction"))
@@ -230,7 +230,7 @@ async fn test_enrich_transaction_500_internal_server_error() {
 async fn test_enrich_transactions_bulk_with_api_user() {
     let mock_server = MockServer::start().await;
     let token = "test-token";
-    let client = Client::new(token, Some(mock_server.uri()));
+    let client = Client::new(token, Some(mock_server.uri())).unwrap();
 
     Mock::given(method("POST"))
         .and(path("/v1/ai/finance/enrichment/transactions"))
@@ -271,7 +271,7 @@ async fn test_enrich_transactions_bulk_with_api_user() {
 async fn test_enrich_transactions_bulk_without_api_user() {
     let mock_server = MockServer::start().await;
     let token = "test-token";
-    let client = Client::new(token, Some(mock_server.uri()));
+    let client = Client::new(token, Some(mock_server.uri())).unwrap();
 
     Mock::given(method("POST"))
         .and(path("/v1/ai/finance/enrichment/transactions"))
@@ -303,31 +303,21 @@ async fn test_enrich_transactions_bulk_without_api_user() {
 
 #[tokio::test]
 async fn test_enrich_transactions_empty_list() {
-    let mock_server = MockServer::start().await;
-    let client = Client::new("test-token", Some(mock_server.uri()));
-
-    Mock::given(method("POST"))
-        .and(path("/v1/ai/finance/enrichment/transactions"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "id": "job-empty-000",
-            "link": "https://api.xyo.financial/downloads/job-empty-000.tar.gz"
-        })))
-        .mount(&mock_server)
-        .await;
+    let client = Client::new("test-token", Some("https://api.xyo.financial".to_string())).unwrap();
 
     let empty_requests: Vec<EnrichmentRequest> = vec![];
-    let resp = client
+    let err = client
         .enrich_transactions(empty_requests, None)
         .await
-        .expect("empty requests list should succeed");
+        .expect_err("empty requests list should return error");
 
-    assert_eq!(resp.id, "job-empty-000");
+    assert_eq!(err.message, "requests batch cannot be empty");
 }
 
 #[tokio::test]
 async fn test_enrich_transactions_400_error() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("test-token", Some(mock_server.uri()));
+    let client = Client::new("test-token", Some(mock_server.uri())).unwrap();
 
     Mock::given(method("POST"))
         .and(path("/v1/ai/finance/enrichment/transactions"))
@@ -356,7 +346,7 @@ async fn test_enrich_transactions_400_error() {
 #[tokio::test]
 async fn test_enrich_transactions_500_error() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("test-token", Some(mock_server.uri()));
+    let client = Client::new("test-token", Some(mock_server.uri())).unwrap();
 
     Mock::given(method("POST"))
         .and(path("/v1/ai/finance/enrichment/transactions"))
@@ -382,7 +372,7 @@ async fn test_enrich_transactions_500_error() {
 async fn test_get_enrichment_status_ready() {
     let mock_server = MockServer::start().await;
     let token = "test-token";
-    let client = Client::new(token, Some(mock_server.uri()));
+    let client = Client::new(token, Some(mock_server.uri())).unwrap();
 
     Mock::given(method("GET"))
         .and(path("/v1/ai/finance/enrichment/status/job-ready-123"))
@@ -405,7 +395,7 @@ async fn test_get_enrichment_status_ready() {
 #[tokio::test]
 async fn test_get_enrichment_status_pending() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("test-token", Some(mock_server.uri()));
+    let client = Client::new("test-token", Some(mock_server.uri())).unwrap();
 
     Mock::given(method("GET"))
         .and(path("/v1/ai/finance/enrichment/status/job-pending-456"))
@@ -426,7 +416,7 @@ async fn test_get_enrichment_status_pending() {
 #[tokio::test]
 async fn test_get_enrichment_status_failed() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("test-token", Some(mock_server.uri()));
+    let client = Client::new("test-token", Some(mock_server.uri())).unwrap();
 
     Mock::given(method("GET"))
         .and(path("/v1/ai/finance/enrichment/status/job-failed-789"))
@@ -447,7 +437,7 @@ async fn test_get_enrichment_status_failed() {
 #[tokio::test]
 async fn test_get_enrichment_status_with_api_user() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("test-token", Some(mock_server.uri()));
+    let client = Client::new("test-token", Some(mock_server.uri())).unwrap();
 
     Mock::given(method("GET"))
         .and(path("/v1/ai/finance/enrichment/status/job-user-111"))
@@ -470,7 +460,7 @@ async fn test_get_enrichment_status_with_api_user() {
 #[tokio::test]
 async fn test_get_enrichment_status_url_encoded_id() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("test-token", Some(mock_server.uri()));
+    let client = Client::new("test-token", Some(mock_server.uri())).unwrap();
 
     Mock::given(method("GET"))
         .and(path("/v1/ai/finance/enrichment/status/job%2Fspecial%3Aid"))
@@ -492,7 +482,7 @@ async fn test_get_enrichment_status_url_encoded_id() {
 #[tokio::test]
 async fn test_get_enrichment_status_404_not_found() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("test-token", Some(mock_server.uri()));
+    let client = Client::new("test-token", Some(mock_server.uri())).unwrap();
 
     Mock::given(method("GET"))
         .and(path("/v1/ai/finance/enrichment/status/nonexistent-job"))
@@ -517,7 +507,7 @@ async fn test_get_enrichment_status_404_not_found() {
 async fn test_enrich_transaction_payload_verification() {
     let mock_server = MockServer::start().await;
     let token = "verified-token";
-    let client = Client::new(token, Some(mock_server.uri()));
+    let client = Client::new(token, Some(mock_server.uri())).unwrap();
 
     let expected_body = serde_json::json!({
         "content": "SPOTIFY PREMIUM",
@@ -553,7 +543,7 @@ async fn test_enrich_transaction_payload_verification() {
 #[tokio::test]
 async fn test_enrich_transaction_empty_categories() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("test-token", Some(mock_server.uri()));
+    let client = Client::new("test-token", Some(mock_server.uri())).unwrap();
 
     Mock::given(method("POST"))
         .and(path("/v1/ai/finance/enrichment/transaction"))
@@ -581,7 +571,7 @@ async fn test_enrich_transaction_empty_categories() {
 async fn test_enrich_transactions_payload_verification() {
     let mock_server = MockServer::start().await;
     let token = "bulk-token";
-    let client = Client::new(token, Some(mock_server.uri()));
+    let client = Client::new(token, Some(mock_server.uri())).unwrap();
 
     let expected_body = serde_json::json!([
         {
@@ -629,7 +619,7 @@ async fn test_enrich_transactions_payload_verification() {
 #[tokio::test]
 async fn test_enrich_transactions_401_unauthorized() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("invalid-token", Some(mock_server.uri()));
+    let client = Client::new("invalid-token", Some(mock_server.uri())).unwrap();
 
     Mock::given(method("POST"))
         .and(path("/v1/ai/finance/enrichment/transactions"))
@@ -658,7 +648,7 @@ async fn test_enrich_transactions_401_unauthorized() {
 #[tokio::test]
 async fn test_get_enrichment_status_401_unauthorized() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("invalid-token", Some(mock_server.uri()));
+    let client = Client::new("invalid-token", Some(mock_server.uri())).unwrap();
 
     Mock::given(method("GET"))
         .and(path("/v1/ai/finance/enrichment/status/job-123"))
@@ -676,12 +666,13 @@ async fn test_get_enrichment_status_401_unauthorized() {
         .expect_err("should return ClientError 401");
 
     assert_eq!(err.code, 401);
+    assert!(err.message.contains("Unauthorized"));
 }
 
 #[tokio::test]
 async fn test_get_enrichment_status_500_internal_server_error() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("test-token", Some(mock_server.uri()));
+    let client = Client::new("test-token", Some(mock_server.uri())).unwrap();
 
     Mock::given(method("GET"))
         .and(path("/v1/ai/finance/enrichment/status/job-err"))
@@ -701,7 +692,7 @@ async fn test_get_enrichment_status_500_internal_server_error() {
 #[tokio::test]
 async fn test_connection_failure_maps_to_client_error() {
     // Port 1 is reserved and typically nothing is listening
-    let client = Client::new("test-token", Some("http://127.0.0.1:1".to_string()));
+    let client = Client::new("test-token", Some("http://127.0.0.1:1".to_string())).unwrap();
 
     let err = client
         .enrich_transaction("TX", "GB")
@@ -741,7 +732,7 @@ fn create_test_tar_gz(entries: &[(&str, &[u8])]) -> Vec<u8> {
 async fn test_download_enrichment_collection_success() {
     let mock_server = MockServer::start().await;
     let token = "download-secret-token";
-    let client = Client::new(token, Some(mock_server.uri()));
+    let client = Client::new(token, Some(mock_server.uri())).unwrap();
 
     let tx0_json = serde_json::to_vec(&serde_json::json!({
         "merchant": "Costa Coffee",
@@ -805,7 +796,7 @@ async fn test_download_enrichment_collection_success() {
 #[tokio::test]
 async fn test_download_enrichment_collection_relative_url() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("test-token", Some(mock_server.uri()));
+    let client = Client::new("test-token", Some(mock_server.uri())).unwrap();
 
     let tx_json = serde_json::to_vec(&serde_json::json!({
         "merchant": "Syniol Limited",
@@ -841,7 +832,7 @@ async fn test_download_enrichment_collection_relative_url() {
 #[tokio::test]
 async fn test_download_enrichment_collection_filters_non_json_files() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("test-token", Some(mock_server.uri()));
+    let client = Client::new("test-token", Some(mock_server.uri())).unwrap();
 
     let tx_json = serde_json::to_vec(&serde_json::json!({
         "merchant": "Starbucks",
@@ -895,7 +886,7 @@ async fn test_download_enrichment_collection_filters_non_json_files() {
 #[tokio::test]
 async fn test_download_enrichment_collection_401_unauthorized() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("invalid-token", Some(mock_server.uri()));
+    let client = Client::new("invalid-token", Some(mock_server.uri())).unwrap();
 
     Mock::given(method("GET"))
         .and(path("/downloads/unauthorized.tar.gz"))
@@ -919,7 +910,7 @@ async fn test_download_enrichment_collection_401_unauthorized() {
 #[tokio::test]
 async fn test_download_enrichment_collection_404_not_found() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("test-token", Some(mock_server.uri()));
+    let client = Client::new("test-token", Some(mock_server.uri())).unwrap();
 
     Mock::given(method("GET"))
         .and(path("/downloads/nonexistent.tar.gz"))
@@ -939,7 +930,7 @@ async fn test_download_enrichment_collection_404_not_found() {
 #[tokio::test]
 async fn test_download_enrichment_collection_500_internal_server_error() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("test-token", Some(mock_server.uri()));
+    let client = Client::new("test-token", Some(mock_server.uri())).unwrap();
 
     Mock::given(method("GET"))
         .and(path("/downloads/server-error.tar.gz"))
@@ -959,7 +950,7 @@ async fn test_download_enrichment_collection_500_internal_server_error() {
 #[tokio::test]
 async fn test_download_enrichment_collection_corrupt_gzip() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("test-token", Some(mock_server.uri()));
+    let client = Client::new("test-token", Some(mock_server.uri())).unwrap();
 
     Mock::given(method("GET"))
         .and(path("/downloads/corrupt.tar.gz"))
@@ -983,7 +974,7 @@ async fn test_download_enrichment_collection_corrupt_gzip() {
 #[tokio::test]
 async fn test_download_enrichment_collection_invalid_json() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("test-token", Some(mock_server.uri()));
+    let client = Client::new("test-token", Some(mock_server.uri())).unwrap();
 
     let invalid_json = b"{\"merchant\": \"incomplete...";
     let archive = create_test_tar_gz(&[("bad_data.json", invalid_json)]);
@@ -1009,7 +1000,7 @@ async fn test_download_enrichment_collection_invalid_json() {
 
 #[tokio::test]
 async fn test_download_enrichment_collection_transport_failure() {
-    let client = Client::new("test-token", Some("http://127.0.0.1:1".to_string()));
+    let client = Client::new("test-token", Some("http://127.0.0.1:1".to_string())).unwrap();
 
     let err = client
         .download_enrichment_collection("http://127.0.0.1:1/nonexistent.tar.gz")
@@ -1022,7 +1013,7 @@ async fn test_download_enrichment_collection_transport_failure() {
 
 #[tokio::test]
 async fn test_download_enrichment_collection_ssrf_protection() {
-    let client = Client::new("test-token", None);
+    let client = Client::new("test-token", None).unwrap();
 
     let err1 = client
         .download_enrichment_collection("file:///etc/passwd")
@@ -1040,7 +1031,7 @@ async fn test_download_enrichment_collection_ssrf_protection() {
 #[tokio::test]
 async fn test_download_enrichment_collection_waf_challenge() {
     let mock_server = MockServer::start().await;
-    let client = Client::new("test-token", Some(mock_server.uri()));
+    let client = Client::new("test-token", Some(mock_server.uri())).unwrap();
 
     Mock::given(method("GET"))
         .and(path("/downloads/job.tar.gz"))
@@ -1071,7 +1062,7 @@ impl wiremock::Match for HeaderMissingMatcher {
 #[tokio::test]
 async fn test_download_enrichment_collection_domain_validation_and_auth() {
     let api_server = MockServer::start().await;
-    let client = Client::new("secret-token-123", Some(api_server.uri()));
+    let client = Client::new("secret-token-123", Some(api_server.uri())).unwrap();
 
     let json_bytes = br#"{"merchant":"Starbucks","description":"Coffee","categories":["Food"],"logo":"url"}"#;
     let archive = create_test_tar_gz(&[("result.json", json_bytes)]);
@@ -1154,5 +1145,25 @@ async fn test_download_security_policy_custom_allowed_host() {
     assert!(!policy.is_allowed("rogue-server.io", "api.xyo.financial"));
 }
 
+#[tokio::test]
+async fn test_enrich_transaction_client_side_validation() {
+    let client = Client::new("test-token", Some("https://api.xyo.financial".to_string())).unwrap();
 
+    let err_empty = client.enrich_transaction("", "GB").await.unwrap_err();
+    assert_eq!(err_empty.message, "request content must not be empty");
 
+    let err_country = client.enrich_transaction("COSTA", "USA").await.unwrap_err();
+    assert_eq!(err_country.message, "request country_code must be a 2-letter ISO 3166-1 alpha-2 code");
+}
+
+#[tokio::test]
+async fn test_enrich_transactions_client_side_batch_item_validation() {
+    let client = Client::new("test-token", Some("https://api.xyo.financial".to_string())).unwrap();
+
+    let requests = vec![
+        EnrichmentRequest { content: "VALID".to_string(), country_code: "GB".to_string() },
+        EnrichmentRequest { content: "".to_string(), country_code: "US".to_string() },
+    ];
+    let err = client.enrich_transactions(requests, None).await.unwrap_err();
+    assert!(err.message.contains("request at index 1 is invalid"));
+}

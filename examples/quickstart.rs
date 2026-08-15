@@ -7,7 +7,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let api_token = std::env::var("XYO_API_TOKEN").unwrap_or_else(|_| "your-bearer-token".to_string());
 
     // Initialize the XYO Financial client with default production endpoint
-    let client = Client::new(api_token, None);
+    let client = Client::new(api_token, None)?;
 
     println!("Enriching single financial transaction...");
 
