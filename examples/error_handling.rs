@@ -4,7 +4,7 @@ use xyo_sdk::error::ClientError;
 #[tokio::main]
 async fn main() {
     // Example using an invalid token to demonstrate structured error handling
-    let client = Client::new("invalid-token", None);
+    let client = Client::new("invalid-token", None).expect("failed to construct client");
 
     println!("Attempting API call with invalid authentication...");
 

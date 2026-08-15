@@ -6,7 +6,7 @@
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let client = Client::new("your-bearer-token", None);
+//!     let client = Client::new("your-bearer-token", None).unwrap();
 //!     let resp = client.enrich_transaction("COSTA PICKUP", "GB").await.unwrap();
 //!     println!("{}", resp.merchant);
 //! }
@@ -78,6 +78,14 @@ pub struct EnrichmentRequest {
 }
 
 impl EnrichmentRequest {
+    /// Construct a new enrichment request.
+    pub fn new(content: impl Into<String>, country_code: impl Into<String>) -> Self {
+        Self {
+            content: content.into(),
+            country_code: country_code.into(),
+        }
+    }
+
     /// Validate client-side field constraints before submission.
     pub fn validate(&self) -> Result<(), ClientError> {
         let content = self.content.trim();
@@ -351,16 +359,16 @@ impl Client {
     ///
     /// * `bearer_token` – the API Bearer token.
     /// * `base_url`     – override the server URL (default: XYO_API_BASE_URL env or `https://api.xyo.financial`).
-    pub fn new(bearer_token: impl Into<String>, base_url: Option<String>) -> Self {
+    pub fn new(bearer_token: impl Into<String>, base_url: Option<String>) -> Result<Self, ClientError> {
         let mut builder = Client::builder().token(bearer_token);
         if let Some(url) = base_url {
             builder = builder.base_url(url);
         }
-        builder.build().expect("default Client build should not fail")
+        builder.build()
     }
 
     /// Construct a new client with dynamic token rotation supplier.
-    pub fn with_token_supplier<F>(supplier: F, base_url: Option<String>) -> Self
+    pub fn with_token_supplier<F>(supplier: F, base_url: Option<String>) -> Result<Self, ClientError>
     where
         F: Fn() -> String + Send + Sync + 'static,
     {
@@ -368,7 +376,7 @@ impl Client {
         if let Some(url) = base_url {
             builder = builder.base_url(url);
         }
-        builder.build().expect("default Client build should not fail")
+        builder.build()
     }
 
     fn get_effective_config(&self) -> Configuration {
@@ -389,6 +397,9 @@ impl Client {
     ) -> Result<EnrichmentResponse, ClientError> {
         let content_str = content.into();
         let country_str = country_code.into();
+        let req = EnrichmentRequest::new(&content_str, &country_str);
+        req.validate()?;
+
         tracing::debug!(country = %country_str, "enrich_transaction executing");
 
         let body = ApiEnrichmentRequest::new(content_str, country_str);
@@ -420,13 +431,25 @@ impl Client {
     ) -> Result<EnrichTransactionCollectionResponse, ClientError> {
         validate_api_user(api_user)?;
 
-        let items: Vec<EnrichTransactionsRequestInner> = requests
-            .into_iter()
-            .map(|r| EnrichTransactionsRequestInner {
-                content: Some(r.content),
-                country_code: Some(r.country_code),
-            })
-            .collect();
+        let raw_requests: Vec<EnrichmentRequest> = requests.into_iter().collect();
+        if raw_requests.is_empty() {
+            return Err(ClientError {
+                code: 0,
+                message: "requests batch cannot be empty".to_string(),
+            });
+        }
+
+        let mut items = Vec::with_capacity(raw_requests.len());
+        for (i, req) in raw_requests.iter().enumerate() {
+            req.validate().map_err(|e| ClientError {
+                code: 0,
+                message: format!("request at index {} is invalid: {}", i, e.message),
+            })?;
+            items.push(EnrichTransactionsRequestInner {
+                content: Some(req.content.clone()),
+                country_code: Some(req.country_code.clone()),
+            });
+        }
 
         tracing::debug!(batch_size = items.len(), user = ?api_user, "enrich_transactions batch submission");
 
@@ -618,10 +641,12 @@ impl Client {
         }
 
         // Stream chunks into buffer with strict byte limit guard
-        let mut buffer = Vec::with_capacity(std::cmp::min(
-            resp.content_length().unwrap_or(0) as usize,
-            DEFAULT_MAX_ARCHIVE_BYTES,
-        ));
+        let initial_capacity = resp
+            .content_length()
+            .and_then(|l| usize::try_from(l).ok())
+            .unwrap_or(0)
+            .min(DEFAULT_MAX_ARCHIVE_BYTES);
+        let mut buffer = Vec::with_capacity(initial_capacity);
 
         let mut resp = resp;
         while let Some(chunk) = resp.chunk().await.map_err(|e| ClientError {
@@ -744,13 +769,9 @@ mod tests {
     use super::*;
     use xyo_openapi_client::apis::ResponseContent;
 
-    static ENV_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
     #[test]
     fn test_client_new_default_base_url() {
-        let _guard = ENV_MUTEX.lock().unwrap();
-        std::env::remove_var("XYO_API_BASE_URL");
-        let client = Client::new("my-token", None);
+        let client = Client::new("my-token", None).expect("Client::new should succeed");
         assert_eq!(client.configuration.base_path, "https://api.xyo.financial");
         assert_eq!(
             client.configuration.bearer_access_token,
@@ -760,7 +781,8 @@ mod tests {
 
     #[test]
     fn test_client_new_custom_base_url() {
-        let client = Client::new("my-token", Some("https://sandbox.api.xyo.financial".to_string()));
+        let client = Client::new("my-token", Some("https://sandbox.api.xyo.financial".to_string()))
+            .expect("Client::new with custom URL should succeed");
         assert_eq!(
             client.configuration.base_path,
             "https://sandbox.api.xyo.financial"
@@ -776,8 +798,8 @@ mod tests {
         let token_str = "token-1";
         let token_string = "token-2".to_string();
 
-        let client1 = Client::new(token_str, None);
-        let client2 = Client::new(token_string, None);
+        let client1 = Client::new(token_str, None).expect("client1 should succeed");
+        let client2 = Client::new(token_string, None).expect("client2 should succeed");
 
         assert_eq!(
             client1.configuration.bearer_access_token,
@@ -809,7 +831,7 @@ mod tests {
 
     #[test]
     fn test_client_debug_token_redaction() {
-        let client = Client::new("super-secret-key-123", None);
+        let client = Client::new("super-secret-key-123", None).expect("Client::new should succeed");
         let debug_str = format!("{:?}", client);
         assert!(!debug_str.contains("super-secret-key-123"));
         assert!(debug_str.contains("[REDACTED]"));
@@ -929,12 +951,13 @@ mod tests {
     }
 
     #[test]
-    fn test_client_new_env_fallback() {
-        let _guard = ENV_MUTEX.lock().unwrap();
-        std::env::set_var("XYO_API_BASE_URL", "https://env.api.xyo.financial");
-        let client = Client::new("test-token", None);
+    fn test_client_builder_custom_base_url() {
+        let client = Client::builder()
+            .token("test-token")
+            .base_url("https://env.api.xyo.financial")
+            .build()
+            .expect("builder with custom base_url should succeed");
         assert_eq!(client.configuration.base_path, "https://env.api.xyo.financial");
-        std::env::remove_var("XYO_API_BASE_URL");
     }
 
     #[test]
@@ -1006,7 +1029,8 @@ mod tests {
         let client = Client::with_token_supplier(
             move || key_clone.lock().unwrap().clone(),
             Some("https://api.xyo.financial".to_string()),
-        );
+        )
+        .expect("Client::with_token_supplier should succeed");
 
         let cfg1 = client.get_effective_config();
         assert_eq!(cfg1.bearer_access_token, Some("key-1".to_string()));
