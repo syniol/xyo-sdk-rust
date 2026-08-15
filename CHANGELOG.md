@@ -1,4 +1,4 @@
-# Changelog
+# 📝 Changelog
 
 All notable changes to the XYO Financial SDK for Rust will be documented in this file.
 
