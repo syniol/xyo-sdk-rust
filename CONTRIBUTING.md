@@ -4,16 +4,16 @@ Thank you for contributing to the **XYO Financial Rust SDK** (`xyo-sdk`). This d
 
 ---
 
-## Table of Contents
+## 📑 Table of Contents
 
-1. [Two-Layer Architecture](#1-two-layer-architecture)
+1. [Two-Layer Architecture](#-1-two-layer-architecture)
    - [Generated Layer (`openapi/`) - Read-Only & Immutable](#generated-layer-openapi---read-only--immutable)
    - [Wrapper Layer (`src/`) - Async Ergonomics & Tokio Integration](#wrapper-layer-src---async-ergonomics--tokio-integration)
-2. [Contribution Workflow & Decision Matrix](#2-contribution-workflow--decision-matrix)
+2. [Contribution Workflow & Decision Matrix](#-2-contribution-workflow--decision-matrix)
    - [Contribution Decision Matrix](#contribution-decision-matrix)
    - [Workflow A: API & Data Model Changes](#workflow-a-api--data-model-changes)
    - [Workflow B: SDK Ergonomics, Helpers & Tests](#workflow-b-sdk-ergonomics-helpers--tests)
-3. [Automated & Local Code Generation](#3-automated--local-code-generation)
+3. [Automated & Local Code Generation](#-3-automated--local-code-generation)
    - [Cross-Repository Automated Generation (`repository_dispatch`)](#cross-repository-automated-generation-repository_dispatch)
    - [Local Code Generation](#local-code-generation)
    - [Prerequisites](#prerequisites)
@@ -21,24 +21,24 @@ Thank you for contributing to the **XYO Financial Rust SDK** (`xyo-sdk`). This d
    - [Post-Generation Clean-Up](#post-generation-clean-up)
    - [Generator Workspace Configuration](#generator-workspace-configuration)
    - [Immutable Rule for Generated Code](#immutable-rule-for-generated-code)
-4. [Quality Gates & Validation](#4-quality-gates--validation)
+4. [Quality Gates & Validation](#-4-quality-gates--validation)
    - [1. `cargo check` (Compilation Verification)](#1-cargo-check-compilation-verification)
    - [2. `cargo test` (Unit & Integration Tests)](#2-cargo-test-unit--integration-tests)
    - [3. `cargo clippy --all-targets` (Static Analysis & Linting)](#3-cargo-clippy---all-targets-static-analysis--linting)
    - [4. `cargo fmt --check` (Code Formatting)](#4-cargo-fmt---check-code-formatting)
-5. [Development & Testing Guide](#5-development--testing-guide)
+5. [Development & Testing Guide](#-5-development--testing-guide)
    - [Running the Test Suite](#running-the-test-suite)
    - [WireMock Integration Tests](#wiremock-integration-tests)
    - [Docker Development Environment](#docker-development-environment)
-6. [Pull Request & Commit Standards](#6-pull-request--commit-standards)
+6. [Pull Request & Commit Standards](#-6-pull-request--commit-standards)
    - [Conventional Commits](#conventional-commits)
    - [PR Submission Checklist](#pr-submission-checklist)
-7. [Release & Versioning Process](#7-release--versioning-process)
-8. [License](#8-license)
+7. [Release & Versioning Process](#-7-release--versioning-process)
+8. [License](#-8-license)
 
 ---
 
-## 1. Two-Layer Architecture
+## 🏗 1. Two-Layer Architecture
 
 The XYO Financial Rust SDK is engineered with a strict **Two-Layer Architecture** to decouple raw OpenAPI transport and serialization logic from high-level, idiomatic Rust developer ergonomics.
 
@@ -105,7 +105,7 @@ The XYO Financial Rust SDK is engineered with a strict **Two-Layer Architecture*
 
 ---
 
-## 2. Contribution Workflow & Decision Matrix
+## 🔀 2. Contribution Workflow & Decision Matrix
 
 To ensure consistency across the entire multi-language XYO SDK ecosystem, determine the appropriate target repository before proposing any changes.
 
@@ -133,7 +133,7 @@ To ensure consistency across the entire multi-language XYO SDK ecosystem, determ
    - Alternatively, pull the updated `openapi.yml` locally and follow the [Local Code Generation](#local-code-generation) instructions.
    - Update `src/client.rs`, `src/error.rs`, and `src/lib.rs` to expose the new functionality with idiomatic async interfaces.
    - Add new tests in `tests/client_test.rs` covering the new behavior.
-   - Run all [Quality Gates](#4-quality-gates--validation) and submit a PR to this repository.
+   - Run all [Quality Gates](#-4-quality-gates--validation) and submit a PR to this repository.
 
 ### Workflow B: SDK Ergonomics, Helpers & Tests
 
@@ -147,7 +147,7 @@ To ensure consistency across the entire multi-language XYO SDK ecosystem, determ
 
 ---
 
-## 3. Automated & Local Code Generation
+## ⚙️ 3. Automated & Local Code Generation
 
 ### Cross-Repository Automated Generation (`repository_dispatch`)
 
@@ -225,7 +225,7 @@ The `openapi/.openapi-generator-ignore` file ensures `openapi/Cargo.toml` is pre
 
 ---
 
-## 4. Quality Gates & Validation
+## 🛡 4. Quality Gates & Validation
 
 Every contribution must pass all institutional quality gates before being approved or merged. Continuous Integration (CI) enforces these checks on all Pull Requests and release branches.
 
@@ -284,7 +284,7 @@ cargo fmt --check
 
 ---
 
-## 5. Development & Testing Guide
+## 🧪 5. Development & Testing Guide
 
 ### Running the Test Suite
 
@@ -332,7 +332,7 @@ make ssh
 
 ---
 
-## 6. Pull Request & Commit Standards
+## 🚀 6. Pull Request & Commit Standards
 
 ### Conventional Commits
 
@@ -368,7 +368,7 @@ Before submitting your Pull Request, ensure that:
 
 ---
 
-## 7. Release & Versioning Process
+## 📦 7. Release & Versioning Process
 
 The XYO Financial Rust SDK follows [Semantic Versioning (SemVer)](https://semver.org/):
 
@@ -385,7 +385,7 @@ The XYO Financial Rust SDK follows [Semantic Versioning (SemVer)](https://semver
 
 ---
 
-## 8. License
+## 📄 8. License
 
 By contributing to the XYO Financial Rust SDK, you agree that your contributions will be licensed under the **Apache License, Version 2.0** (`Apache-2.0`). See the [LICENSE](LICENSE) file for details.
 

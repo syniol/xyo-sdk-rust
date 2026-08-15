@@ -1,4 +1,4 @@
-# Rust SDK Mascot Concepts
+# 🦀 Rust SDK Mascot Concepts
 
 Here are three elegant, modern variations of the Rust mascot tailored for the high-end financial and AI sector:
 
