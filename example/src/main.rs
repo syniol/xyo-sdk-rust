@@ -2,7 +2,8 @@ use xyo_sdk::client::Client;
 
 #[tokio::main]
 async fn main() {
-    let client = Client::new("YourBearerTokenFromXYODashboard", None);
+    let client = Client::new("YourBearerTokenFromXYODashboard", None)
+        .expect("failed to initialize client");
 
     println!("Initialized XYO SDK client successfully.");
     match client.enrich_transaction("COSTA PICKUP", "GB").await {
