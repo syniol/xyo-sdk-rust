@@ -3,7 +3,7 @@
 <p align="center">
     <a href="https://xyo.financial" target="_blank"><img alt="Rust Crab Mascot" width="45%" src="https://github.com/xyo-financial/sdk-rust/blob/main/docs/rust_mascot_sleek_neon.jpg?raw=true" /></a>
     <br/>
-    <b>Enterprise Financial Transaction Enrichment SDK for Rust</b>
+    <b>Financial Transaction Enrichment SDK for Rust</b>
 </p>
 
 <p align="center">
@@ -17,7 +17,7 @@
 
 ---
 
-## 📖 Executive Summary
+## 📖 Summary
 
 The **XYO Financial SDK for Rust** provides an institutional-grade, asynchronous client library for integrating XYO's AI-driven transaction enrichment engine into high-performance financial systems, payment gateways, and banking microservices.
 
@@ -27,7 +27,7 @@ Maintained by [Syniol Limited](https://syniol.com) as the official Rust distribu
 
 ---
 
-## 🏗 Enterprise Architectural Principles
+## 🏗 Architectural Principles
 
 1. **Async & Non-Blocking**: Built natively on [Tokio](https://tokio.rs) and [Reqwest](https://docs.rs/reqwest) for zero-cost async I/O and seamless concurrency under heavy transactional load.
 2. **Thread-Safe & Concurrent**: `Client` is `Send + Sync`, enabling safe sharing across worker pools, Tokio tasks, and Actix/Axum web handlers as an application singleton.
@@ -358,7 +358,7 @@ cargo run --example error_handling
 
 ---
 
-## 📞 Enterprise Support
+## 📞 Support
 
 - **Developer Dashboard**: [https://xyo.financial/dashboard](https://xyo.financial/dashboard)
 - **Technical Support**: [support@syniol.com](mailto:support@syniol.com)
