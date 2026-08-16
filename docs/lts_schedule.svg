@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" width="100%" height="auto">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0B0F19"/>
+      <stop offset="100%" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00D2FF"/>
+      <stop offset="100%" stop-color="#2563EB"/>
+    </linearGradient>
+  </defs>
+
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    .title { font-size: 20px; font-weight: 700; fill: #F8FAFC; }
+    .subtitle { font-size: 13px; font-weight: 400; fill: #94A3B8; }
+    .axis-label { font-size: 12px; font-weight: 600; fill: #64748B; text-anchor: middle; }
+    .track-title { font-size: 13px; font-weight: 700; fill: #E2E8F0; text-anchor: end; }
+    .bar-text { font-size: 11px; font-weight: 600; fill: #FFFFFF; }
+    .legend-text { font-size: 12px; font-weight: 500; fill: #CBD5E1; }
+    .marker-text { font-size: 11px; font-weight: 700; fill: #00D2FF; text-anchor: middle; }
+  </style>
+
+  <!-- Container Box -->
+  <rect x="0" y="0" width="960" height="400" rx="16" fill="url(#bgGrad)" stroke="#1E293B" stroke-width="2"/>
+
+  <!-- Header Section -->
+  <rect x="24" y="24" width="8" height="28" rx="4" fill="url(#brandGrad)"/>
+  <text x="42" y="38" class="title">Rust Edition &amp; MSRV Support Schedule</text>
+  <text x="42" y="55" class="subtitle">XYO Financial Enterprise SDK • 3-Month Proactive MSRV Notification Policy</text>
+
+  <!-- Grid & Timeline Axis (2024 - 2027) -->
+  <g transform="translate(170, 85)">
+    <!-- Vertical Grid Lines -->
+    <line x1="0" y1="0" x2="0" y2="220" stroke="#1E293B" stroke-width="1.5"/>
+    <text x="0" y="-10" class="axis-label">2024</text>
+
+    <line x1="190" y1="0" x2="190" y2="220" stroke="#1E293B" stroke-width="1.5"/>
+    <text x="190" y="-10" class="axis-label">2025</text>
+
+    <line x1="380" y1="0" x2="380" y2="220" stroke="#1E293B" stroke-width="1.5"/>
+    <text x="380" y="-10" class="axis-label">2026</text>
+
+    <line x1="570" y1="0" x2="570" y2="220" stroke="#1E293B" stroke-width="1.5"/>
+    <text x="570" y="-10" class="axis-label">2027</text>
+
+    <line x1="750" y1="0" x2="750" y2="220" stroke="#1E293B" stroke-width="1.5"/>
+    <text x="750" y="-10" class="axis-label">2028</text>
+
+    <!-- Version Tracks -->
+    <!-- Rust 1.70 - 1.74 (Legacy) -->
+    <text x="-20" y="24" class="track-title">&lt; 1.75</text>
+    <rect x="0" y="8" width="120" height="24" rx="6" fill="#EF4444" opacity="0.8"/>
+    <text x="8" y="24" class="bar-text">Deprecated / Unsupported</text>
+
+    <!-- Rust 1.75+ (MSRV Baseline) -->
+    <text x="-20" y="64" class="track-title">Rust 1.75+</text>
+    <rect x="120" y="48" width="350" height="24" rx="6" fill="#F59E0B" opacity="0.9"/>
+    <text x="128" y="64" class="bar-text">Guaranteed MSRV Baseline (Edition 2021)</text>
+
+    <!-- Rust 1.80 - 1.84 (Stable) -->
+    <text x="-20" y="104" class="track-title">Rust 1.80+</text>
+    <rect x="230" y="88" width="320" height="24" rx="6" fill="#10B981"/>
+    <text x="238" y="104" class="bar-text">Active Stable Toolchain</text>
+
+    <!-- Rust 1.85+ / Edition 2024 -->
+    <text x="-20" y="144" class="track-title">Rust 1.85+</text>
+    <rect x="330" y="128" width="350" height="24" rx="6" fill="#00D2FF" opacity="0.95"/>
+    <text x="338" y="144" class="bar-text" fill="#0F172A">Recommended Compiler (Edition 2024 Ready)</text>
+
+    <!-- Future MSRV Bump Target (Rust 1.80+ Baseline in 2027) -->
+    <text x="-20" y="184" class="track-title">Future MSRV</text>
+    <rect x="470" y="168" width="280" height="24" rx="6" fill="#2563EB" opacity="0.8"/>
+    <text x="478" y="184" class="bar-text">Planned MSRV Baseline (3-Mo Notice)</text>
+
+    <!-- Current Time Milestone (Mid 2026: ~x=475) -->
+    <line x1="475" y1="-25" x2="475" y2="225" stroke="#00D2FF" stroke-width="2" stroke-dasharray="4 3"/>
+    <polygon points="470,-25 480,-25 475,-15" fill="#00D2FF"/>
+    <text x="475" y="-30" class="marker-text">CURRENT (2026)</text>
+  </g>
+
+  <!-- Legend Section -->
+  <g transform="translate(60, 345)">
+    <rect x="0" y="0" width="14" height="14" rx="3" fill="#10B981"/>
+    <text x="22" y="12" class="legend-text">Active Stable Toolchain</text>
+
+    <rect x="200" y="0" width="14" height="14" rx="3" fill="#00D2FF"/>
+    <text x="222" y="12" class="legend-text">Recommended Target</text>
+
+    <rect x="420" y="0" width="14" height="14" rx="3" fill="#F59E0B"/>
+    <text x="442" y="12" class="legend-text">Current MSRV Floor (1.75+)</text>
+
+    <rect x="670" y="0" width="14" height="14" rx="3" fill="#2563EB"/>
+    <text x="692" y="12" class="legend-text">3-Month Advance Notice Window</text>
+  </g>
+</svg>
