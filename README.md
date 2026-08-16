@@ -1,18 +1,23 @@
-# XYO.Financial SDK for Rust
+<p align="center">
+  <a href="https://xyo.financial" target="_blank" rel="noopener noreferrer">
+    <img alt="XYO Financial Rust Mascot" width="380" src="docs/mascot.png" />
+  </a>
+</p>
+
+<h1 align="center">XYO Financial SDK for Rust</h1>
 
 <p align="center">
-    <a href="https://xyo.financial" target="_blank"><img alt="Rust Crab Mascot" width="45%" src="https://github.com/xyo-financial/sdk-rust/blob/main/docs/rust_mascot_sleek_neon.jpg?raw=true" /></a>
-    <br/>
-    <b>Financial Transaction Enrichment SDK for Rust</b>
+  <a href="https://crates.io/crates/xyo-sdk"><img src="https://img.shields.io/crates/v/xyo-sdk.svg?color=blue" alt="Crates.io Version" /></a>
+  <a href="https://docs.rs/xyo-sdk"><img src="https://docs.rs/xyo-sdk/badge.svg" alt="Documentation" /></a>
+  <a href="https://github.com/xyo-financial/sdk-rust/actions/workflows/makefile.yml"><img src="https://github.com/xyo-financial/sdk-rust/actions/workflows/makefile.yml/badge.svg?branch=main" alt="CI Build Pipeline" /></a>
+  <img src="https://img.shields.io/badge/Rust-2021_Edition-orange?logo=rust&logoColor=white" alt="Rust Edition" />
+  <img src="https://img.shields.io/badge/Runtime-Tokio_Async-blueviolet" alt="Tokio Async" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License" /></a>
 </p>
 
 <p align="center">
-    <a href="https://crates.io/crates/xyo-sdk"><img src="https://img.shields.io/crates/v/xyo-sdk.svg?color=blue" alt="Crates.io Version" /></a>
-    <a href="https://docs.rs/xyo-sdk"><img src="https://docs.rs/xyo-sdk/badge.svg" alt="Documentation" /></a>
-    <a href="https://github.com/xyo-financial/sdk-rust/actions/workflows/makefile.yml"><img src="https://github.com/xyo-financial/sdk-rust/actions/workflows/makefile.yml/badge.svg?branch=main" alt="CI Build Pipeline" /></a>
-    <img src="https://img.shields.io/badge/Rust-2021_Edition-orange?logo=rust&logoColor=white" alt="Rust Edition" />
-    <img src="https://img.shields.io/badge/Runtime-Tokio_Async-blueviolet" alt="Tokio Async" />
-    <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License" />
+  <strong>The official Rust SDK for <a href="https://xyo.financial">XYO Financial</a>.</strong><br>
+  Seamlessly enrich raw financial transactions into clean merchant profiles, intelligent business categorizations, high-res logos, and geolocated address metadata using AI-powered enrichment pipelines.
 </p>
 
 ---
