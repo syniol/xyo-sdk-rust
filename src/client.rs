@@ -215,6 +215,21 @@ fn validate_header_value(val: Option<&str>) -> Result<(), ClientError> {
     Ok(())
 }
 
+pub const MAX_ERROR_BODY_BYTES: usize = 64 * 1024; // 64 KiB
+
+async fn read_bounded_error_body(mut resp: reqwest::Response) -> String {
+    let mut buf = Vec::new();
+    while let Ok(Some(chunk)) = resp.chunk().await {
+        if buf.len() + chunk.len() >= MAX_ERROR_BODY_BYTES {
+            let remaining = MAX_ERROR_BODY_BYTES.saturating_sub(buf.len());
+            buf.extend_from_slice(&chunk[..remaining]);
+            break;
+        }
+        buf.extend_from_slice(&chunk);
+    }
+    String::from_utf8_lossy(&buf).to_string()
+}
+
 fn validate_api_user(api_user: Option<&str>) -> Result<(), ClientError> {
     validate_header_value(api_user)
 }
@@ -353,6 +368,18 @@ impl ClientBuilder {
             .base_url
             .or_else(|| std::env::var("XYO_API_BASE_URL").ok())
             .unwrap_or_else(|| "https://api.xyo.financial".to_string());
+
+        let parsed_url = url::Url::parse(&effective_url).map_err(|e| {
+            ClientError::new(0, format!("Invalid base URL {:?}: {}", effective_url, e))
+        })?;
+        let scheme = parsed_url.scheme();
+        if scheme != "http" && scheme != "https" {
+            return Err(ClientError::new(
+                0,
+                format!("Unsupported base URL scheme {:?} (only http and https are permitted)", scheme),
+            ));
+        }
+
         configuration.base_path = effective_url.trim_end_matches('/').to_string();
 
         Ok(Client {
@@ -515,7 +542,7 @@ impl Client {
             let code = status.as_u16();
             let rate_limit = extract_rate_limit_headers(resp.headers())
                 .or_else(|| if code == 429 { Some(RateLimitError::default()) } else { None });
-            let message = resp.text().await.unwrap_or_default();
+            let message = read_bounded_error_body(resp).await;
             return Err(ClientError {
                 code,
                 message,
@@ -523,16 +550,7 @@ impl Client {
             });
         }
 
-        let resp_obj: xyo_openapi_client::models::EnrichmentResponse = resp.json().await.map_err(|e| ClientError::new(0, e.to_string()))?;
-
-        Ok(EnrichmentResponse {
-            merchant: resp_obj.merchant,
-            description: resp_obj.description,
-            categories: resp_obj.categories,
-            logo: resp_obj.logo,
-            location: resp_obj.location,
-            address: resp_obj.address,
-        })
+        resp.json::<EnrichmentResponse>().await.map_err(|e| ClientError::new(0, e.to_string()))
     }
 
     // ── enrichTransactions ────────────────────────────────────────────────────
@@ -634,7 +652,7 @@ impl Client {
             let code = status.as_u16();
             let rate_limit = extract_rate_limit_headers(resp.headers())
                 .or_else(|| if code == 429 { Some(RateLimitError::default()) } else { None });
-            let message = resp.text().await.unwrap_or_default();
+            let message = read_bounded_error_body(resp).await;
             return Err(ClientError {
                 code,
                 message,
@@ -717,7 +735,7 @@ impl Client {
             let code = status.as_u16();
             let rate_limit = extract_rate_limit_headers(resp.headers())
                 .or_else(|| if code == 429 { Some(RateLimitError::default()) } else { None });
-            let message = resp.text().await.unwrap_or_default();
+            let message = read_bounded_error_body(resp).await;
             return Err(ClientError {
                 code,
                 message,
@@ -842,7 +860,7 @@ impl Client {
             let code = status.as_u16();
             let rate_limit = extract_rate_limit_headers(resp.headers())
                 .or_else(|| if code == 429 { Some(RateLimitError::default()) } else { None });
-            let message = resp.text().await.unwrap_or_default();
+            let message = read_bounded_error_body(resp).await;
             return Err(ClientError {
                 code,
                 message,
@@ -1326,5 +1344,15 @@ mod tests {
             .expect_err("infinite requests iterator should terminate early with error");
 
         assert!(err.message.contains("requests batch size exceeds maximum allowed limit"));
+    }
+
+    #[test]
+    fn test_client_builder_invalid_url_scheme() {
+        let err = Client::builder()
+            .token("test-token")
+            .base_url("ftp://api.xyo.financial")
+            .build()
+            .expect_err("ftp scheme should be rejected");
+        assert!(err.message.contains("Unsupported base URL scheme"));
     }
 }
