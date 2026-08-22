@@ -405,7 +405,7 @@ impl Client {
         let body = ApiEnrichmentRequest::new(content_str, country_str);
         let config = self.get_effective_config();
 
-        let resp = enrichment_api::enrich_transaction(&config, Some(body))
+        let resp = enrichment_api::enrich_transaction(&config, body, None, None)
             .await
             .map_err(map_error)?;
 
@@ -446,8 +446,8 @@ impl Client {
                 message: format!("request at index {} is invalid: {}", i, e.message),
             })?;
             items.push(EnrichTransactionsRequestInner {
-                content: Some(req.content.clone()),
-                country_code: Some(req.country_code.clone()),
+                content: req.content.clone(),
+                country_code: req.country_code.clone(),
             });
         }
 
@@ -455,7 +455,7 @@ impl Client {
 
         let config = self.get_effective_config();
 
-        let resp = enrichment_api::enrich_transactions(&config, api_user, Some(items))
+        let resp = enrichment_api::enrich_transactions(&config, items, api_user, None, None)
             .await
             .map_err(map_error)?;
 
@@ -477,7 +477,7 @@ impl Client {
         tracing::debug!(job_id = %id, user = ?api_user, "get_enrichment_status polling");
 
         let config = self.get_effective_config();
-        let resp = enrichment_api::get_enrichment_status(&config, id, api_user)
+        let resp = enrichment_api::get_enrichment_status(&config, id, api_user, None, None)
             .await
             .map_err(map_error)?;
 

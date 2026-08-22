@@ -1114,9 +1114,9 @@ async fn test_client_builder_integration() {
             "merchant": "Builder Corp",
             "description": "Integration test",
             "categories": ["Tech"],
-            "logo": null,
-            "location": null,
-            "address": null
+            "logo": "",
+            "location": "",
+            "address": ""
         })))
         .mount(&mock_server)
         .await;
