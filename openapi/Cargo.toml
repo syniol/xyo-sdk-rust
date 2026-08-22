@@ -22,3 +22,9 @@ default = ["rustls-tls"]
 native-tls = ["reqwest/native-tls"]
 rustls-tls = ["reqwest/rustls-tls"]
 
+[lints.rust]
+warnings = "allow"
+[lints.clippy]
+all = "allow"
+
+
