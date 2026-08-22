@@ -14,7 +14,6 @@
 
 use std::time::Duration;
 use xyo_openapi_client::apis::configuration::Configuration;
-use xyo_openapi_client::apis::enrichment_api;
 use xyo_openapi_client::models::{EnrichmentRequest as ApiEnrichmentRequest, EnrichTransactionsRequestInner};
 use serde::{Deserialize, Serialize};
 
@@ -489,17 +488,50 @@ impl Client {
         let body = ApiEnrichmentRequest::new(content_str, country_str);
         let config = self.get_effective_config();
 
-        let resp = enrichment_api::enrich_transaction(&config, body, corr_id, traceparent)
-            .await
-            .map_err(map_error)?;
+        let uri_str = format!("{}/v1/ai/finance/enrichment/transaction", config.base_path);
+        let mut req_builder = config.client.request(reqwest::Method::POST, &uri_str);
+
+        if let Some(ref user_agent) = config.user_agent {
+            req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent);
+        }
+        if let Some(param_value) = corr_id {
+            req_builder = req_builder.header("X-Correlation-ID", param_value);
+        }
+        if let Some(param_value) = traceparent {
+            req_builder = req_builder.header("traceparent", param_value);
+        }
+        if let Some(ref token) = config.bearer_access_token {
+            req_builder = req_builder.bearer_auth(token);
+        }
+        req_builder = req_builder.json(&body);
+
+        let resp = req_builder.send().await.map_err(|e| ClientError::new(
+            e.status().map(|s| s.as_u16()).unwrap_or(0),
+            e.to_string(),
+        ))?;
+
+        let status = resp.status();
+        if status.is_client_error() || status.is_server_error() {
+            let code = status.as_u16();
+            let rate_limit = extract_rate_limit_headers(resp.headers())
+                .or_else(|| if code == 429 { Some(RateLimitError::default()) } else { None });
+            let message = resp.text().await.unwrap_or_default();
+            return Err(ClientError {
+                code,
+                message,
+                rate_limit,
+            });
+        }
+
+        let resp_obj: xyo_openapi_client::models::EnrichmentResponse = resp.json().await.map_err(|e| ClientError::new(0, e.to_string()))?;
 
         Ok(EnrichmentResponse {
-            merchant: resp.merchant,
-            description: resp.description,
-            categories: resp.categories,
-            logo: resp.logo,
-            location: resp.location,
-            address: resp.address,
+            merchant: resp_obj.merchant,
+            description: resp_obj.description,
+            categories: resp_obj.categories,
+            logo: resp_obj.logo,
+            location: resp_obj.location,
+            address: resp_obj.address,
         })
     }
 
@@ -572,13 +604,49 @@ impl Client {
 
         let config = self.get_effective_config();
 
-        let resp = enrichment_api::enrich_transactions(&config, items, api_user, corr_id, traceparent)
-            .await
-            .map_err(map_error)?;
+        let uri_str = format!("{}/v1/ai/finance/enrichment/transactions", config.base_path);
+        let mut req_builder = config.client.request(reqwest::Method::POST, &uri_str);
+
+        if let Some(ref user_agent) = config.user_agent {
+            req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent);
+        }
+        if let Some(param_value) = api_user {
+            req_builder = req_builder.header("x-api-user", param_value);
+        }
+        if let Some(param_value) = corr_id {
+            req_builder = req_builder.header("X-Correlation-ID", param_value);
+        }
+        if let Some(param_value) = traceparent {
+            req_builder = req_builder.header("traceparent", param_value);
+        }
+        if let Some(ref token) = config.bearer_access_token {
+            req_builder = req_builder.bearer_auth(token);
+        }
+        req_builder = req_builder.json(&items);
+
+        let resp = req_builder.send().await.map_err(|e| ClientError::new(
+            e.status().map(|s| s.as_u16()).unwrap_or(0),
+            e.to_string(),
+        ))?;
+
+        let status = resp.status();
+        if status.is_client_error() || status.is_server_error() {
+            let code = status.as_u16();
+            let rate_limit = extract_rate_limit_headers(resp.headers())
+                .or_else(|| if code == 429 { Some(RateLimitError::default()) } else { None });
+            let message = resp.text().await.unwrap_or_default();
+            return Err(ClientError {
+                code,
+                message,
+                rate_limit,
+            });
+        }
+
+        let resp_obj: xyo_openapi_client::models::EnrichTransactionCollectionResponse = resp.json().await.map_err(|e| ClientError::new(0, e.to_string()))?;
 
         Ok(EnrichTransactionCollectionResponse {
-            id: resp.id,
-            link: resp.link,
+            id: resp_obj.id,
+            link: resp_obj.link,
         })
     }
 
@@ -619,12 +687,48 @@ impl Client {
         tracing::debug!(job_id = %id, user = ?api_user, ?corr_id, ?traceparent, "get_enrichment_status polling");
 
         let config = self.get_effective_config();
-        let resp = enrichment_api::get_enrichment_status(&config, id, api_user, corr_id, traceparent)
-            .await
-            .map_err(map_error)?;
+
+        let uri_str = format!("{}/v1/ai/finance/enrichment/status/{}", config.base_path, xyo_openapi_client::apis::urlencode(id));
+        let mut req_builder = config.client.request(reqwest::Method::GET, &uri_str);
+
+        if let Some(ref user_agent) = config.user_agent {
+            req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent);
+        }
+        if let Some(param_value) = api_user {
+            req_builder = req_builder.header("x-api-user", param_value);
+        }
+        if let Some(param_value) = corr_id {
+            req_builder = req_builder.header("X-Correlation-ID", param_value);
+        }
+        if let Some(param_value) = traceparent {
+            req_builder = req_builder.header("traceparent", param_value);
+        }
+        if let Some(ref token) = config.bearer_access_token {
+            req_builder = req_builder.bearer_auth(token);
+        }
+
+        let resp = req_builder.send().await.map_err(|e| ClientError::new(
+            e.status().map(|s| s.as_u16()).unwrap_or(0),
+            e.to_string(),
+        ))?;
+
+        let status = resp.status();
+        if status.is_client_error() || status.is_server_error() {
+            let code = status.as_u16();
+            let rate_limit = extract_rate_limit_headers(resp.headers())
+                .or_else(|| if code == 429 { Some(RateLimitError::default()) } else { None });
+            let message = resp.text().await.unwrap_or_default();
+            return Err(ClientError {
+                code,
+                message,
+                rate_limit,
+            });
+        }
+
+        let resp_obj: xyo_openapi_client::models::EnrichmentCollectionStatusResponse = resp.json().await.map_err(|e| ClientError::new(0, e.to_string()))?;
 
         use xyo_openapi_client::models::enrichment_collection_status_response::Status;
-        Ok(match resp.status {
+        Ok(match resp_obj.status {
             Status::Ready => EnrichmentStatus::Ready,
             Status::Pending => EnrichmentStatus::Pending,
             Status::Failed => EnrichmentStatus::Failed,
@@ -886,12 +990,12 @@ impl Client {
 
 // ── Error mapping ─────────────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 fn map_error<T: std::fmt::Debug>(err: xyo_openapi_client::apis::Error<T>) -> ClientError {
     match err {
         xyo_openapi_client::apis::Error::ResponseError(rc) => {
             let code = rc.status.as_u16();
-            let rate_limit = extract_rate_limit_headers(&rc.headers)
-                .or_else(|| if code == 429 { Some(RateLimitError::default()) } else { None });
+            let rate_limit = if code == 429 { Some(RateLimitError::default()) } else { None };
             ClientError {
                 code,
                 message: rc.content,
@@ -1059,7 +1163,6 @@ mod tests {
                 status: reqwest::StatusCode::FORBIDDEN,
                 content: "Forbidden action".to_string(),
                 entity: None,
-                headers: reqwest::header::HeaderMap::new(),
             });
 
         let client_err = map_error(err);
