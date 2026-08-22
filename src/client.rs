@@ -154,7 +154,7 @@ impl EnrichmentRequest {
 pub const DEFAULT_MAX_TAR_ENTRIES: usize = 50_000;
 pub const DEFAULT_MAX_ENTRY_BYTES: u64 = 10 * 1024 * 1024; // 10 MiB
 pub const DEFAULT_MAX_ARCHIVE_BYTES: usize = 100 * 1024 * 1024; // 100 MiB
-pub const DEFAULT_USER_AGENT: &str = "xyo-sdk-rust/2.0.0";
+pub const DEFAULT_USER_AGENT: &str = "xyo-sdk-rust/2.1.0";
 
 /// Security policy governing permitted hosts for archive downloads.
 #[derive(Debug, Clone)]

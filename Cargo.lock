@@ -1629,7 +1629,7 @@ dependencies = [
 
 [[package]]
 name = "xyo-openapi-client"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "getrandom 0.2.15",
  "idna",
@@ -1643,7 +1643,7 @@ dependencies = [
 
 [[package]]
 name = "xyo-sdk"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "flate2",
  "httpdate",
