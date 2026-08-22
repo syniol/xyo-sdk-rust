@@ -1,6 +1,6 @@
 [package]
 name = "xyo-openapi-client"
-version = "2.0.0"
+version = "2.1.0"
 authors = ["OpenAPI Generator team and contributors"]
 description = "RESTful API for enriching financial transactions."
 # Override this license by providing a License Object in the OpenAPI.
