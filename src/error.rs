@@ -86,22 +86,20 @@ impl ClientError {
 
 /// Helper to extract RateLimit header values from an HTTP response HeaderMap into `RateLimitError`.
 pub fn extract_rate_limit_headers(headers: &reqwest::header::HeaderMap) -> Option<RateLimitError> {
-    let get_header_str = |keys: &[&str]| -> Option<String> {
+    let parse_u64 = |keys: &[&str]| -> Option<u64> {
         for &k in keys {
             if let Some(val) = headers.get(k) {
                 if let Ok(s) = val.to_str() {
                     let trimmed = s.trim();
                     if !trimmed.is_empty() {
-                        return Some(trimmed.to_string());
+                        if let Ok(n) = trimmed.parse::<u64>() {
+                            return Some(n);
+                        }
                     }
                 }
             }
         }
         None
-    };
-
-    let parse_u64 = |keys: &[&str]| -> Option<u64> {
-        get_header_str(keys).and_then(|s| s.parse::<u64>().ok())
     };
 
     let retry_after = parse_u64(&["retry-after", "x-retry-after"]);

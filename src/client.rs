@@ -28,6 +28,8 @@ pub struct RequestOptions {
     /// Distributed tracing traceparent header (`traceparent` header, W3C format).
     pub traceparent: Option<String>,
     /// Optional tenant user identifier (`x-api-user` header).
+    ///
+    /// Note: `api_user` is specifically used for bulk/batch operations (e.g. `enrich_transactions` and `get_enrichment_status`).
     pub api_user: Option<String>,
 }
 
@@ -199,6 +201,18 @@ fn sanitize_entry_name(name: &str) -> String {
     name.chars()
         .map(|c| if c.is_control() { '_' } else { c })
         .collect()
+}
+
+fn validate_header_value(val: Option<&str>) -> Result<(), ClientError> {
+    if let Some(v) = val {
+        if v.contains('\r') || v.contains('\n') {
+            return Err(ClientError::new(
+                0,
+                "header value contains invalid CRLF characters",
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn validate_api_user(api_user: Option<&str>) -> Result<(), ClientError> {
@@ -462,6 +476,9 @@ impl Client {
             .and_then(|o| o.traceparent.as_deref())
             .or(self.default_traceparent.as_deref());
 
+        validate_header_value(corr_id)?;
+        validate_header_value(traceparent)?;
+
         tracing::debug!(country = %country_str, ?corr_id, ?traceparent, "enrich_transaction executing");
 
         let body = ApiEnrichmentRequest::new(content_str, country_str);
@@ -507,39 +524,44 @@ impl Client {
         let api_user = options.and_then(|o| o.api_user.as_deref());
         validate_api_user(api_user)?;
 
-        let raw_requests: Vec<EnrichmentRequest> = requests.into_iter().collect();
-        if raw_requests.is_empty() {
-            return Err(ClientError::new(0, "requests batch cannot be empty"));
-        }
-        if raw_requests.len() > DEFAULT_MAX_TAR_ENTRIES {
-            return Err(ClientError::new(
-                0,
-                format!(
-                    "requests batch size ({}) exceeds maximum allowed limit of {} items",
-                    raw_requests.len(),
-                    DEFAULT_MAX_TAR_ENTRIES
-                ),
-            ));
-        }
-
-        let mut items = Vec::with_capacity(raw_requests.len());
-        for (i, req) in raw_requests.iter().enumerate() {
-            req.validate().map_err(|e| ClientError::new(
-                0,
-                format!("request at index {} is invalid: {}", i, e.message),
-            ))?;
-            items.push(EnrichTransactionsRequestInner {
-                content: req.content.clone(),
-                country_code: req.country_code.clone(),
-            });
-        }
-
         let corr_id = options
             .and_then(|o| o.correlation_id.as_deref())
             .or(self.default_correlation_id.as_deref());
         let traceparent = options
             .and_then(|o| o.traceparent.as_deref())
             .or(self.default_traceparent.as_deref());
+
+        validate_header_value(corr_id)?;
+        validate_header_value(traceparent)?;
+
+        let iter = requests.into_iter();
+        let (lower, upper) = iter.size_hint();
+        let initial_capacity = upper.unwrap_or(lower).min(DEFAULT_MAX_TAR_ENTRIES);
+        let mut items = Vec::with_capacity(initial_capacity);
+
+        for (i, req) in iter.enumerate() {
+            if i >= DEFAULT_MAX_TAR_ENTRIES {
+                return Err(ClientError::new(
+                    0,
+                    format!(
+                        "requests batch size exceeds maximum allowed limit of {} items",
+                        DEFAULT_MAX_TAR_ENTRIES
+                    ),
+                ));
+            }
+            req.validate().map_err(|e| ClientError::new(
+                0,
+                format!("request at index {} is invalid: {}", i, e.message),
+            ))?;
+            items.push(EnrichTransactionsRequestInner {
+                content: req.content,
+                country_code: req.country_code,
+            });
+        }
+
+        if items.is_empty() {
+            return Err(ClientError::new(0, "requests batch cannot be empty"));
+        }
 
         tracing::debug!(batch_size = items.len(), user = ?api_user, ?corr_id, ?traceparent, "enrich_transactions batch submission");
 
@@ -585,6 +607,9 @@ impl Client {
         let traceparent = options
             .and_then(|o| o.traceparent.as_deref())
             .or(self.default_traceparent.as_deref());
+
+        validate_header_value(corr_id)?;
+        validate_header_value(traceparent)?;
 
         tracing::debug!(job_id = %id, user = ?api_user, ?corr_id, ?traceparent, "get_enrichment_status polling");
 
@@ -705,11 +730,10 @@ impl Client {
 
         let status = resp.status();
         if status.is_client_error() || status.is_server_error() {
-            let headers = resp.headers().clone();
-            let message = resp.text().await.unwrap_or_default();
             let code = status.as_u16();
-            let rate_limit = extract_rate_limit_headers(&headers)
+            let rate_limit = extract_rate_limit_headers(resp.headers())
                 .or_else(|| if code == 429 { Some(RateLimitError::default()) } else { None });
+            let message = resp.text().await.unwrap_or_default();
             return Err(ClientError {
                 code,
                 message,
@@ -1153,5 +1177,38 @@ mod tests {
         *key_holder.lock().unwrap() = "rotated-key-2".to_string();
         let cfg2 = client.get_effective_config();
         assert_eq!(cfg2.bearer_access_token, Some("rotated-key-2".to_string()));
+    }
+
+    #[test]
+    fn test_validate_header_value_crlf_rejection() {
+        assert!(validate_header_value(Some("valid-header-val")).is_ok());
+        assert!(validate_header_value(None).is_ok());
+
+        let crlf1 = validate_header_value(Some("val\r\ninjected-header: bad"));
+        assert!(crlf1.is_err());
+        assert_eq!(
+            crlf1.unwrap_err().message,
+            "header value contains invalid CRLF characters"
+        );
+
+        let crlf2 = validate_header_value(Some("val\ninjected-header: bad"));
+        assert!(crlf2.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_enrich_transactions_lazy_iterator_limit() {
+        let client = Client::new("test-token", Some("https://api.xyo.financial".to_string())).unwrap();
+
+        let infinite_requests = std::iter::repeat_with(|| EnrichmentRequest {
+            content: "COSTA COFFEE".to_string(),
+            country_code: "GB".to_string(),
+        });
+
+        let err = client
+            .enrich_transactions(infinite_requests, None)
+            .await
+            .expect_err("infinite requests iterator should terminate early with error");
+
+        assert!(err.message.contains("requests batch size exceeds maximum allowed limit"));
     }
 }
