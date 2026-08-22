@@ -1337,9 +1337,9 @@ async fn test_rate_limit_429_header_parsing() {
 
     let rl = err.rate_limit.expect("rate_limit info should be extracted");
     assert_eq!(rl.retry_after, Some(120));
-    assert_eq!(rl.rate_limit, Some(5000));
-    assert_eq!(rl.rate_remaining, Some(0));
-    assert_eq!(rl.rate_reset, Some(1700001000));
+    assert_eq!(rl.limit, Some(5000));
+    assert_eq!(rl.remaining, Some(0));
+    assert_eq!(rl.reset, Some(1700001000));
 }
 
 #[tokio::test]

@@ -16,7 +16,7 @@ async fn main() {
             println!("  HTTP Status Code: {}", err.code);
             println!("  Error Message:    {}", err.message);
             if let Some(rl) = &err.rate_limit {
-                println!("  RateLimit Info:   Retry-After={:?}, Limit={:?}, Remaining={:?}", rl.retry_after, rl.rate_limit, rl.rate_remaining);
+                println!("  RateLimit Info:   Retry-After={:?}, Limit={:?}, Remaining={:?}, Reset={:?}", rl.retry_after, rl.limit, rl.remaining, rl.reset);
             }
 
             match err.code {

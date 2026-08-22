@@ -21,7 +21,8 @@ use serde::{Deserialize, Serialize};
 use crate::error::{extract_rate_limit_headers, ClientError, RateLimitError};
 
 /// Optional per-request configuration options (e.g. distributed tracing headers, tenant user ID).
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct RequestOptions {
     /// Distributed tracing correlation identifier (`X-Correlation-ID` header).
     pub correlation_id: Option<String>,
@@ -216,12 +217,7 @@ fn validate_header_value(val: Option<&str>) -> Result<(), ClientError> {
 }
 
 fn validate_api_user(api_user: Option<&str>) -> Result<(), ClientError> {
-    if let Some(user) = api_user {
-        if user.contains('\r') || user.contains('\n') {
-            return Err(ClientError::new(0, "api_user contains invalid CRLF characters"));
-        }
-    }
-    Ok(())
+    validate_header_value(api_user)
 }
 
 type TokenSupplier = std::sync::Arc<dyn Fn() -> String + Send + Sync>;
@@ -468,6 +464,15 @@ impl Client {
         let country_str = country_code.into();
         let req = EnrichmentRequest::new(&content_str, &country_str);
         req.validate()?;
+
+        if let Some(opts) = options {
+            if opts.api_user.is_some() {
+                return Err(ClientError::new(
+                    0,
+                    "`api_user` is only applicable to bulk operations",
+                ));
+            }
+        }
 
         let corr_id = options
             .and_then(|o| o.correlation_id.as_deref())
@@ -1151,13 +1156,21 @@ mod tests {
 
         let crlf1 = validate_api_user(Some("user\r\ninjected-header: val"));
         assert!(crlf1.is_err());
-        assert_eq!(
-            crlf1.unwrap_err().message,
-            "api_user contains invalid CRLF characters"
-        );
+        assert!(crlf1.unwrap_err().message.contains("CRLF"));
 
         let crlf2 = validate_api_user(Some("user\ninjected-header: val"));
         assert!(crlf2.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_enrich_transaction_rejects_api_user() {
+        let client = Client::new("test-token", Some("https://api.xyo.financial".to_string())).unwrap();
+        let opts = RequestOptions::new().api_user("user-123");
+        let err = client
+            .enrich_transaction_with_options("COSTA", "GB", Some(&opts))
+            .await
+            .expect_err("api_user should be rejected for single transaction");
+        assert_eq!(err.message, "`api_user` is only applicable to bulk operations");
     }
 
     #[test]
