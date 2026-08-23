@@ -57,7 +57,7 @@ Add `xyo-sdk` and `tokio` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-xyo-sdk = "2.0.0"
+xyo-sdk = "2.1.0"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 
