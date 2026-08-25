@@ -107,3 +107,11 @@ jobs:
         run: |
           cd example
           cargo run
+
+      - name: Dispatch SDK version update
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.SDK_DISPATCH_TOKEN }}
+          repository: xyo-financial/xyo-financial
+          event-type: sdk-version-updated
+          client-payload: '{"sdk": "rust", "version": "${{ github.event.workflow_run.head_branch }}"}'
