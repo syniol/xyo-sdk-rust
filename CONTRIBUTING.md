@@ -225,6 +225,24 @@ The `openapi/.openapi-generator-ignore` file ensures `openapi/Cargo.toml` is pre
 
 ---
 
+### Generated Code Policy
+
+> [!IMPORTANT]
+> `openapi/` is produced by OpenAPI Generator and is committed **exactly as the generator emits it**.
+
+- **Never edit it by hand.** Any manual change is silently destroyed by the next specification dispatch. Real fixes have already been lost this way, including hand-applied fixes in other SDKs in this fleet.
+- **Never reformat it.** It is excluded from formatting and linting via the `ignore` list in `rustfmt.toml`. Generated output that has been reformatted no longer matches what the generator produces, so every regeneration then fights CI and the diff fills with style churn instead of specification changes.
+- **It is out of scope for code review, security review, audit and any other sanitisation pass.** Do not raise findings against generated output. Review the specification in [`xyo-financial/specs`](https://github.com/xyo-financial/specs) or the hand-written wrapper layer instead, which is what consumers actually call.
+- **It carries no hand-written tests.** Generated tests are disabled at generation time. Test the wrapper layer.
+
+If generated output is wrong, fix it at source, never in the output:
+
+1. Change the specification upstream in `xyo-financial/specs`, if the contract itself is wrong.
+2. Change the generator invocation in `.github/workflows/generate.yml`, if it is a generation setting.
+3. Add the file to `openapi/.openapi-generator-ignore`, if the generator's version of it is genuinely not the source of truth. Nothing is currently protected this way in this repository.
+
+---
+
 ## 🛡 4. Quality Gates & Validation
 
 Every contribution must pass all institutional quality gates before being approved or merged. Continuous Integration (CI) enforces these checks on all Pull Requests and release branches.
