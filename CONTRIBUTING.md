@@ -1,42 +1,35 @@
-# Contributing to XYO Financial Rust SDK
+# 🤝 Contributing to XYO Financial Rust SDK
 
 Thank you for contributing to the **XYO Financial Rust SDK** (`xyo-sdk`). This document provides institutional-grade engineering guidelines for contributing to the architecture, development, testing, generation, and maintenance of the SDK.
 
 ---
 
 ## 📑 Table of Contents
-
-1. [Two-Layer Architecture](#-1-two-layer-architecture)
-   - [Generated Layer (`openapi/`) - Read-Only & Immutable](#generated-layer-openapi---read-only--immutable)
-   - [Wrapper Layer (`src/`) - Async Ergonomics & Tokio Integration](#wrapper-layer-src---async-ergonomics--tokio-integration)
-2. [Contribution Workflow & Decision Matrix](#-2-contribution-workflow--decision-matrix)
-   - [Contribution Decision Matrix](#contribution-decision-matrix)
-   - [Workflow A: API & Data Model Changes](#workflow-a-api--data-model-changes)
-   - [Workflow B: SDK Ergonomics, Helpers & Tests](#workflow-b-sdk-ergonomics-helpers--tests)
-3. [Automated & Local Code Generation](#-3-automated--local-code-generation)
-   - [Cross-Repository Automated Generation (`repository_dispatch`)](#cross-repository-automated-generation-repository_dispatch)
-   - [Local Code Generation](#local-code-generation)
-   - [Prerequisites](#prerequisites)
-   - [Generation Command](#generation-command)
-   - [Post-Generation Clean-Up](#post-generation-clean-up)
-   - [Generator Workspace Configuration](#generator-workspace-configuration)
-   - [Immutable Rule for Generated Code](#immutable-rule-for-generated-code)
-4. [Quality Gates & Validation](#-4-quality-gates--validation)
-   - [1. `cargo check` (Compilation Verification)](#1-cargo-check-compilation-verification)
-   - [2. `cargo test` (Unit & Integration Tests)](#2-cargo-test-unit--integration-tests)
-   - [3. `cargo clippy --all-targets` (Static Analysis & Linting)](#3-cargo-clippy---all-targets-static-analysis--linting)
-   - [4. `cargo fmt --check` (Code Formatting)](#4-cargo-fmt---check-code-formatting)
-5. [Development & Testing Guide](#-5-development--testing-guide)
-   - [Running the Test Suite](#running-the-test-suite)
-   - [WireMock Integration Tests](#wiremock-integration-tests)
-   - [Docker Development Environment](#docker-development-environment)
-6. [Pull Request & Commit Standards](#-6-pull-request--commit-standards)
-   - [Conventional Commits](#conventional-commits)
-   - [PR Submission Checklist](#pr-submission-checklist)
-7. [Release & Versioning Process](#-7-release--versioning-process)
-8. [License](#-8-license)
-
----
+- [🏗 1. Two-Layer Architecture](#1-two-layer-architecture)
+  - [🔹 Generated Layer (`openapi/`) - Read-Only & Immutable](#generated-layer-openapi-read-only-immutable)
+  - [⚙️ Wrapper Layer (`src/`) - Async Ergonomics & Tokio Integration](#wrapper-layer-src-async-ergonomics-tokio-integration)
+- [🔀 2. Contribution Workflow & Decision Matrix](#2-contribution-workflow-decision-matrix)
+  - [🔀 Contribution Decision Matrix](#contribution-decision-matrix)
+  - [🔀 Workflow A: API & Data Model Changes](#workflow-a-api-data-model-changes)
+  - [🔀 Workflow B: SDK Ergonomics, Helpers & Tests](#workflow-b-sdk-ergonomics-helpers-tests)
+- [⚙️ 3. Automated & Local Code Generation](#3-automated-local-code-generation)
+  - [🔹 Cross-Repository Automated Generation (`repository_dispatch`)](#cross-repository-automated-generation-repository_dispatch)
+  - [⚙️ Local Code Generation](#local-code-generation)
+  - [📋 Generated Code Policy](#generated-code-policy)
+- [🛡 4. Quality Gates & Validation](#4-quality-gates-validation)
+  - [🔹 1. `cargo check` (Compilation Verification)](#1-cargo-check-compilation-verification)
+  - [🧪 2. `cargo test` (Unit & Integration Tests)](#2-cargo-test-unit-integration-tests)
+  - [🔹 3. `cargo clippy --all-targets` (Static Analysis & Linting)](#3-cargo-clippy-all-targets-static-analysis-linting)
+  - [🔹 4. `cargo fmt --check` (Code Formatting)](#4-cargo-fmt-check-code-formatting)
+- [🧪 5. Development & Testing Guide](#5-development-testing-guide)
+  - [🧪 Running the Test Suite](#running-the-test-suite)
+  - [🧪 WireMock Integration Tests](#wiremock-integration-tests)
+  - [🛠 Docker Development Environment](#docker-development-environment)
+- [🚀 6. Pull Request & Commit Standards](#6-pull-request-commit-standards)
+  - [🚀 Conventional Commits](#conventional-commits)
+  - [🔹 PR Submission Checklist](#pr-submission-checklist)
+- [📦 7. Release & Versioning Process](#7-release-versioning-process)
+- [📄 8. License](#8-license)
 
 ## 🏗 1. Two-Layer Architecture
 
@@ -71,7 +64,7 @@ The XYO Financial Rust SDK is engineered with a strict **Two-Layer Architecture*
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Generated Layer (`openapi/`) - Read-Only & Immutable
+### 🔹 Generated Layer (`openapi/`) - Read-Only & Immutable
 
 - **Location**: `openapi/`
 - **Workspace Package**: `xyo-openapi-client`
@@ -81,7 +74,7 @@ The XYO Financial Rust SDK is engineered with a strict **Two-Layer Architecture*
   - `openapi/src/models/`: Raw data transfer objects (DTOs), serialization and deserialization routines via `serde`.
 - **Policy**: **DO NOT edit or reformat files in `openapi/` manually.** Any manual modifications will be permanently lost during the next code generation run. All schema, route, and data model alterations must be made upstream in [`xyo-financial/specs`](https://github.com/xyo-financial/specs). Linters and formatters are explicitly configured to ignore this directory.
 
-### Wrapper Layer (`src/`) - Async Ergonomics & Tokio Integration
+### ⚙️ Wrapper Layer (`src/`) - Async Ergonomics & Tokio Integration
 
 - **Location**: `src/`
 - **Crate**: `xyo-sdk`
@@ -109,7 +102,7 @@ The XYO Financial Rust SDK is engineered with a strict **Two-Layer Architecture*
 
 To ensure consistency across the entire multi-language XYO SDK ecosystem, determine the appropriate target repository before proposing any changes.
 
-### Contribution Decision Matrix
+### 🔀 Contribution Decision Matrix
 
 | Proposed Change | Destination Repository | Workflow |
 | :--- | :--- | :--- |
@@ -124,7 +117,7 @@ To ensure consistency across the entire multi-language XYO SDK ecosystem, determ
 
 ---
 
-### Workflow A: API & Data Model Changes
+### 🔀 Workflow A: API & Data Model Changes
 
 1. Fork and clone [`xyo-financial/specs`](https://github.com/xyo-financial/specs).
 2. Propose your changes to `openapi.yml` and submit a Pull Request upstream.
@@ -135,7 +128,7 @@ To ensure consistency across the entire multi-language XYO SDK ecosystem, determ
    - Add new tests in `tests/client_test.rs` covering the new behavior.
    - Run all [Quality Gates](#-4-quality-gates--validation) and submit a PR to this repository.
 
-### Workflow B: SDK Ergonomics, Helpers & Tests
+### 🔀 Workflow B: SDK Ergonomics, Helpers & Tests
 
 1. Create a descriptive feature branch from `main` or `release-v2`:
    ```bash
@@ -149,7 +142,7 @@ To ensure consistency across the entire multi-language XYO SDK ecosystem, determ
 
 ## ⚙️ 3. Automated & Local Code Generation
 
-### Cross-Repository Automated Generation (`repository_dispatch`)
+### 🔹 Cross-Repository Automated Generation (`repository_dispatch`)
 
 The Rust SDK participates in automated cross-repository code generation:
 1. When a new tag or branch update is published in [`xyo-financial/specs`](https://github.com/xyo-financial/specs), a GitHub Actions workflow dispatches a `repository_dispatch` event (`spec_tagged` or `spec_updated`) to this repository.
@@ -163,7 +156,7 @@ The Rust SDK participates in automated cross-repository code generation:
 
 The workflow can also be triggered manually via `workflow_dispatch` with a custom `spec_tag` input.
 
-### Local Code Generation
+### ⚙️ Local Code Generation
 
 To regenerate the low-level `openapi/` crate locally against a local or remote OpenAPI specification:
 
@@ -225,7 +218,7 @@ The `openapi/.openapi-generator-ignore` file ensures `openapi/Cargo.toml` is pre
 
 ---
 
-### Generated Code Policy
+### 📋 Generated Code Policy
 
 > [!IMPORTANT]
 > `openapi/` is produced by OpenAPI Generator and is committed **exactly as the generator emits it**.
@@ -260,7 +253,7 @@ Every contribution must pass all institutional quality gates before being approv
 └───────────────────────────────┴──────────────────────────────────────────┘
 ```
 
-### 1. `cargo check` (Compilation Verification)
+### 🔹 1. `cargo check` (Compilation Verification)
 
 Verifies that the entire workspace, including the generated `xyo-openapi-client` crate and the `xyo-sdk` wrapper crate, compiles cleanly without warnings or missing dependencies.
 
@@ -270,7 +263,7 @@ cargo check
 
 - **Requirement**: Zero compilation errors.
 
-### 2. `cargo test` (Unit & Integration Tests)
+### 🧪 2. `cargo test` (Unit & Integration Tests)
 
 Executes all unit tests in `src/`, doc-tests in public documentation, and comprehensive integration tests in `tests/client_test.rs`.
 
@@ -280,7 +273,7 @@ cargo test
 
 - **Requirement**: All unit tests, doc-tests, and mock integration tests must pass with `0 failed; 0 filtered out`.
 
-### 3. `cargo clippy --all-targets` (Static Analysis & Linting)
+### 🔹 3. `cargo clippy --all-targets` (Static Analysis & Linting)
 
 Runs Clippy across the entire crate surface, including library code, unit tests, integration test binaries, and examples.
 
@@ -290,7 +283,7 @@ cargo clippy --all-targets
 
 - **Requirement**: Must exit with code `0` and produce zero warnings.
 
-### 4. `cargo fmt --check` (Code Formatting)
+### 🔹 4. `cargo fmt --check` (Code Formatting)
 
 Verifies that all hand-crafted code in `src/`, `tests/`, and `example/` adheres to standard Rust formatting guidelines.
 
@@ -304,7 +297,7 @@ cargo fmt --check
 
 ## 🧪 5. Development & Testing Guide
 
-### Running the Test Suite
+### 🧪 Running the Test Suite
 
 The test suite includes:
 - **Unit Tests**: Located inline in `src/client.rs` and `src/error.rs`, validating error mapping, serialization, and enum deserialization.
@@ -323,7 +316,7 @@ To run a specific test by name:
 cargo test test_enrich_transaction_success -- --nocapture
 ```
 
-### WireMock Integration Tests
+### 🧪 WireMock Integration Tests
 
 The integration test suite in `tests/client_test.rs` validates:
 - HTTP 200 OK single and bulk transaction enrichment workflows.
@@ -336,15 +329,15 @@ The integration test suite in `tests/client_test.rs` validates:
 
 When adding new SDK features, always add corresponding WireMock test scenarios in `tests/client_test.rs`.
 
-### Docker Development Environment
+### 🛠 Docker Development Environment
 
 A standard `Dockerfile` and `Makefile` are provided for containerized development and CI replication:
 
 ```bash
-# Build the Docker image
+# 🤝 Build the Docker image
 make build
 
-# Launch an interactive shell inside the development container
+# 🤝 Launch an interactive shell inside the development container
 make ssh
 ```
 
@@ -352,7 +345,7 @@ make ssh
 
 ## 🚀 6. Pull Request & Commit Standards
 
-### Conventional Commits
+### 🚀 Conventional Commits
 
 We adhere to the [Conventional Commits](https://www.conventionalcommits.org/) specification for institutional auditability:
 
@@ -372,7 +365,7 @@ Introduce exponential backoff retry handler when receiving HTTP 429
 responses from the XYO Financial enrichment endpoint.
 ```
 
-### PR Submission Checklist
+### 🔹 PR Submission Checklist
 
 Before submitting your Pull Request, ensure that:
 
