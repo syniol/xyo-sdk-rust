@@ -16,15 +16,14 @@ pub struct RateLimitError {
     pub reset: Option<u64>,
 }
 
-/// Error type returned by the XYO SDK client.
+/// Error type returned by operations across the XYO Financial SDK.
 #[derive(Debug, Clone, PartialEq, Eq)]
-/// A standard error returned by the client.
 pub struct ClientError {
     /// Human-readable error message.
     pub message: String,
-    /// HTTP status code or 0 if a local error.
+    /// HTTP status code or 0 if a client-side / local validation error.
     pub code: u16,
-    /// Rate limiting metadata if this error was a 429 Too Many Requests.
+    /// Rate limiting metadata if this error was caused by HTTP 429 Too Many Requests.
     pub rate_limit: Option<RateLimitError>,
 }
 

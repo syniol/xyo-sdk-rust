@@ -37,23 +37,27 @@ pub struct RequestOptions {
 
 impl RequestOptions {
     /// Creates a new, empty set of request options.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Sets the correlation ID for distributed tracing.
+    /// Sets the correlation ID for distributed tracing (`X-Correlation-ID` header).
+    #[must_use]
     pub fn correlation_id(mut self, correlation_id: impl Into<String>) -> Self {
         self.correlation_id = Some(correlation_id.into());
         self
     }
 
-    /// Sets the W3C traceparent header.
+    /// Sets the W3C traceparent header (`traceparent` header).
+    #[must_use]
     pub fn traceparent(mut self, traceparent: impl Into<String>) -> Self {
         self.traceparent = Some(traceparent.into());
         self
     }
 
-    /// Sets the tenant API user ID.
+    /// Sets the tenant API user ID (`x-api-user` header).
+    #[must_use]
     pub fn api_user(mut self, api_user: impl Into<String>) -> Self {
         self.api_user = Some(api_user.into());
         self
@@ -72,25 +76,30 @@ where
 
 // ── Re-exported response types ────────────────────────────────────────────────
 
-/// Response from a single-transaction enrichment.
+/// Response from a single transaction enrichment.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EnrichmentResponse {
-    #[serde(default, deserialize_with = "deserialize_null_as_empty_string")]
     /// The cleaned merchant name.
+    #[serde(default, deserialize_with = "deserialize_null_as_empty_string")]
     pub merchant: String,
-    #[serde(default, deserialize_with = "deserialize_null_as_empty_string")]
+
     /// A cleaned narrative suitable for consumer display.
-    pub description: String,
-    #[serde(default)]
-    /// Hierarchical categorization of the merchant.
-    pub categories: Vec<String>,
     #[serde(default, deserialize_with = "deserialize_null_as_empty_string")]
-    /// High resolution logo URL.
+    pub description: String,
+
+    /// Hierarchical categorization of the merchant.
+    #[serde(default)]
+    pub categories: Vec<String>,
+
+    /// High-resolution logo URL (or empty string if not resolved).
+    #[serde(default, deserialize_with = "deserialize_null_as_empty_string")]
     pub logo: String,
-    /// Empty string when the API returns null / empty.
+
+    /// Merchant geographic location or city (or empty string if unmapped).
     #[serde(default, deserialize_with = "deserialize_null_as_empty_string")]
     pub location: String,
-    /// Empty string when the API returns null / empty.
+
+    /// Merchant physical street address (or empty string if unmapped).
     #[serde(default, deserialize_with = "deserialize_null_as_empty_string")]
     pub address: String,
 }
@@ -115,8 +124,7 @@ pub enum EnrichmentStatus {
     Failed,
 }
 
-/// A single transaction to submit for enrichment.
-/// A single transaction enrichment request containing the raw narrative and country code.
+/// A single financial transaction request containing the raw narrative and ISO country code.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnrichmentRequest {
     /// Payment description (max 128 chars).
@@ -261,7 +269,6 @@ type TokenSupplier = std::sync::Arc<dyn Fn() -> String + Send + Sync>;
 // ── ClientBuilder ─────────────────────────────────────────────────────────────
 
 /// Builder for creating and customizing an async [`Client`].
-/// A builder to configure and construct a [`Client`].
 pub struct ClientBuilder {
     bearer_token: Option<String>,
     token_supplier: Option<TokenSupplier>,
@@ -282,8 +289,7 @@ impl Default for ClientBuilder {
 }
 
 impl ClientBuilder {
-    /// Create a new builder with default configuration.
-    /// Creates a new, empty set of request options.
+    /// Creates a new [`ClientBuilder`] with default configuration and production settings.
     pub fn new() -> Self {
         Self {
             bearer_token: None,
@@ -300,12 +306,14 @@ impl ClientBuilder {
     }
 
     /// Set static Bearer API token.
+    #[must_use]
     pub fn token(mut self, token: impl Into<String>) -> Self {
         self.bearer_token = Some(token.into());
         self
     }
 
     /// Set dynamic Bearer token rotation supplier.
+    #[must_use]
     pub fn token_supplier<F>(mut self, supplier: F) -> Self
     where
         F: Fn() -> String + Send + Sync + 'static,
@@ -315,56 +323,63 @@ impl ClientBuilder {
     }
 
     /// Override the API base URL.
+    #[must_use]
     pub fn base_url(mut self, base_url: impl Into<String>) -> Self {
         self.base_url = Some(base_url.into());
         self
     }
 
     /// Set custom User-Agent header string.
+    #[must_use]
     pub fn user_agent(mut self, user_agent: impl Into<String>) -> Self {
         self.user_agent = Some(user_agent.into());
         self
     }
 
     /// Set request timeout.
+    #[must_use]
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.timeout = Some(timeout);
         self
     }
 
     /// Set connect timeout.
+    #[must_use]
     pub fn connect_timeout(mut self, connect_timeout: Duration) -> Self {
         self.connect_timeout = Some(connect_timeout);
         self
     }
 
     /// Add an explicitly permitted host for archive downloads.
+    #[must_use]
     pub fn allow_download_host(mut self, host: impl Into<String>) -> Self {
         self.download_policy.allowed_hosts.push(host.into());
         self
     }
 
     /// Replace the entire archive download security policy.
+    #[must_use]
     pub fn download_policy(mut self, policy: DownloadSecurityPolicy) -> Self {
         self.download_policy = policy;
         self
     }
 
     /// Provide a custom pre-configured `reqwest::Client`.
+    #[must_use]
     pub fn custom_http_client(mut self, client: reqwest::Client) -> Self {
         self.custom_http_client = Some(client);
         self
     }
 
     /// Set default distributed tracing correlation ID (`X-Correlation-ID` header).
-    /// Sets the correlation ID for distributed tracing.
+    #[must_use]
     pub fn correlation_id(mut self, correlation_id: impl Into<String>) -> Self {
         self.correlation_id = Some(correlation_id.into());
         self
     }
 
     /// Set default distributed tracing traceparent header (`traceparent` header, W3C format).
-    /// Sets the W3C traceparent header.
+    #[must_use]
     pub fn traceparent(mut self, traceparent: impl Into<String>) -> Self {
         self.traceparent = Some(traceparent.into());
         self
@@ -440,11 +455,10 @@ impl std::fmt::Debug for ClientBuilder {
 
 // ── Client ────────────────────────────────────────────────────────────────────
 
-/// Async client for the XYO Financial Transaction Enrichment API.
-#[derive(Clone)]
 /// The main entry point for the XYO Financial API client.
 ///
-/// Thread-safe and designed to be reused across requests.
+/// Thread-safe, asynchronous, and designed to be reused across requests.
+#[derive(Clone)]
 pub struct Client {
     configuration: Configuration,
     token_supplier: Option<TokenSupplier>,
@@ -511,7 +525,6 @@ impl Client {
     // ── enrichTransaction ─────────────────────────────────────────────────────
 
     /// Enrich a single financial transaction synchronously.
-    /// Enrich a single financial transaction synchronously without extra options.
     pub async fn enrich_transaction(
         &self,
         content: impl Into<String>,
@@ -605,8 +618,8 @@ impl Client {
 
     /// Enrich a collection of financial transactions asynchronously.
     ///
-    /// Returns a job `id` that can be polled with [`Client::get_enrichment_status`].
-    /// Enrich a collection of financial transactions asynchronously.
+    /// Submits up to 50,000 transactions and returns a job [`EnrichTransactionCollectionResponse`]
+    /// with an `id` that can be polled with [`Client::get_enrichment_status`].
     pub async fn enrich_transactions(
         &self,
         requests: impl IntoIterator<Item = EnrichmentRequest>,
