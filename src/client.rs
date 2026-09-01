@@ -37,6 +37,9 @@ pub struct RequestOptions {
 
 impl RequestOptions {
     /// Creates a new, empty set of request options.
+    ///
+    /// All fields default to `None`, meaning no additional headers
+    /// (`X-Correlation-ID`, `traceparent`, `x-api-user`) will be injected.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -135,6 +138,7 @@ pub struct EnrichmentRequest {
 
 impl EnrichmentRequest {
     /// Construct a new enrichment request.
+    #[must_use]
     pub fn new(content: impl Into<String>, country_code: impl Into<String>) -> Self {
         Self {
             content: content.into(),
@@ -143,6 +147,12 @@ impl EnrichmentRequest {
     }
 
     /// Validate client-side field constraints before submission.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError`] if:
+    /// - `content` is empty or exceeds 128 characters.
+    /// - `country_code` is not a valid 2-letter ISO 3166-1 alpha-2 code.
     pub fn validate(&self) -> Result<(), ClientError> {
         let content = self.content.trim();
         if content.is_empty() {
@@ -386,6 +396,17 @@ impl ClientBuilder {
     }
 
     /// Build the configured [`Client`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError`] if:
+    /// - Building the underlying HTTP client fails.
+    /// - The configured base URL is invalid or uses an unsupported scheme (not `http` or `https`).
+    ///
+    /// # Panics
+    ///
+    /// Does not panic during construction. However, if a dynamic `token_supplier` closure is
+    /// provided and panics when invoked at request time, that panic will propagate to the caller.
     pub fn build(self) -> Result<Client, ClientError> {
         let http_client = if let Some(client) = self.custom_http_client {
             client
@@ -480,6 +501,7 @@ impl std::fmt::Debug for Client {
 
 impl Client {
     /// Construct a new client builder.
+    #[must_use]
     pub fn builder() -> ClientBuilder {
         ClientBuilder::new()
     }
@@ -488,6 +510,10 @@ impl Client {
     ///
     /// * `bearer_token` – the API Bearer token.
     /// * `base_url`     – override the server URL (default: XYO_API_BASE_URL env or `https://api.xyo.financial`).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError`] if the base URL or internal HTTP client configuration fails.
     pub fn new(
         bearer_token: impl Into<String>,
         base_url: Option<String>,
@@ -500,6 +526,10 @@ impl Client {
     }
 
     /// Construct a new client with dynamic token rotation supplier.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError`] if the base URL or internal HTTP client configuration fails.
     pub fn with_token_supplier<F>(
         supplier: F,
         base_url: Option<String>,
@@ -524,7 +554,17 @@ impl Client {
 
     // ── enrichTransaction ─────────────────────────────────────────────────────
 
-    /// Enrich a single financial transaction synchronously.
+    /// Enrich a single financial transaction in real-time.
+    ///
+    /// For bulk asynchronous processing of up to 50,000 transactions, see [`Client::enrich_transactions`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError`] if:
+    /// - `content` or `country_code` fails validation (code `0`).
+    /// - The API responds with an HTTP error status code.
+    /// - A network transport or connection timeout occurs.
+    /// - HTTP 429 Rate Limiting is encountered (attaches [`RateLimitError`] metadata).
     pub async fn enrich_transaction(
         &self,
         content: impl Into<String>,
@@ -534,7 +574,16 @@ impl Client {
             .await
     }
 
-    /// Enrich a single financial transaction synchronously with per-request options (distributed tracing, tenant user ID).
+    /// Enrich a single financial transaction in real-time with per-request options.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError`] if:
+    /// - `content` or `country_code` fails validation (code `0`).
+    /// - `options.api_user` is set (bulk operations only).
+    /// - `correlation_id` or `traceparent` headers contain invalid CRLF characters.
+    /// - The API responds with an HTTP error status code.
+    /// - HTTP 429 Rate Limiting is encountered.
     pub async fn enrich_transaction_with_options(
         &self,
         content: impl Into<String>,
@@ -620,6 +669,14 @@ impl Client {
     ///
     /// Submits up to 50,000 transactions and returns a job [`EnrichTransactionCollectionResponse`]
     /// with an `id` that can be polled with [`Client::get_enrichment_status`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError`] if:
+    /// - The batch is empty or exceeds the maximum limit of [`DEFAULT_MAX_TAR_ENTRIES`] (50,000 items).
+    /// - Any item within the batch fails validation.
+    /// - The API responds with an HTTP error status code.
+    /// - HTTP 429 Rate Limiting is encountered.
     pub async fn enrich_transactions(
         &self,
         requests: impl IntoIterator<Item = EnrichmentRequest>,
@@ -634,6 +691,15 @@ impl Client {
     }
 
     /// Enrich a collection of financial transactions asynchronously with per-request options.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError`] if:
+    /// - The batch is empty or exceeds the maximum limit of [`DEFAULT_MAX_TAR_ENTRIES`] items.
+    /// - Any item within the batch fails validation.
+    /// - `api_user`, `correlation_id`, or `traceparent` headers contain invalid CRLF characters.
+    /// - The API responds with an HTTP error status code.
+    /// - HTTP 429 Rate Limiting is encountered.
     pub async fn enrich_transactions_with_options(
         &self,
         requests: impl IntoIterator<Item = EnrichmentRequest>,
@@ -743,6 +809,13 @@ impl Client {
     // ── getEnrichmentStatus ───────────────────────────────────────────────────
 
     /// Get the status of an asynchronous bulk enrichment job.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError`] if:
+    /// - The `id` is invalid or not found on the server.
+    /// - The API responds with an HTTP error status code.
+    /// - HTTP 429 Rate Limiting is encountered.
     pub async fn get_enrichment_status(
         &self,
         id: &str,
@@ -757,6 +830,14 @@ impl Client {
     }
 
     /// Get the status of an asynchronous bulk enrichment job with per-request options.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError`] if:
+    /// - `api_user`, `correlation_id`, or `traceparent` headers contain invalid CRLF characters.
+    /// - The `id` is invalid or not found on the server.
+    /// - The API responds with an HTTP error status code.
+    /// - HTTP 429 Rate Limiting is encountered.
     pub async fn get_enrichment_status_with_options(
         &self,
         id: &str,
@@ -842,8 +923,28 @@ impl Client {
     /// Download and unpack an enrichment collection archive (`.tar.gz`) from a bulk job.
     ///
     /// Performs an HTTP GET request to `download_url` with host-isolated Bearer authentication
-    /// and multi-MIME stream negotiation, decompresses the archive with decompression bomb
-    /// and Zip Slip defenses, and parses each `.json` file into an [`EnrichmentResponse`].
+    /// (governed by [`DownloadSecurityPolicy`]) and multi-MIME stream negotiation, decompresses
+    /// the archive with decompression bomb defenses (max [`DEFAULT_MAX_ARCHIVE_BYTES`] total,
+    /// [`DEFAULT_MAX_ENTRY_BYTES`] per entry, [`DEFAULT_MAX_TAR_ENTRIES`] entries), and Zip-Slip
+    /// path traversal protection, then parses each `.json` file into an [`EnrichmentResponse`].
+    ///
+    /// # Security
+    ///
+    /// - **SSRF Protection**: The download host must be permitted by [`DownloadSecurityPolicy`].
+    /// - **Auth Isolation**: Bearer tokens are only attached when `download_url` is same-origin
+    ///   with the configured API base URL.
+    /// - **Decompression Bombs**: Total archive size, per-entry size, and entry count are strictly bounded.
+    /// - **Zip-Slip**: Paths containing `..`, leading `/`, or leading `\` are safely filtered.
+    /// - **Log Injection**: Entry names are sanitized before inclusion in diagnostic logs.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError`] if:
+    /// - `download_url` is empty, malformed, or specifies an unsupported scheme.
+    /// - The destination domain is rejected by [`DownloadSecurityPolicy`].
+    /// - The download request fails or returns an HTTP error status code.
+    /// - Archive decompression exceeds size or entry count limits.
+    /// - JSON parsing of any extracted response fails.
     pub async fn download_enrichment_collection(
         &self,
         download_url: &str,
