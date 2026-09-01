@@ -1,3 +1,7 @@
+//! XYO Financial Rust SDK.
+//!
+//! This crate provides the official Rust client for the XYO Financial API.
+
 pub mod client;
 pub mod error;
 

@@ -12,10 +12,12 @@
 //! }
 //! ```
 
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use xyo_openapi_client::apis::configuration::Configuration;
-use xyo_openapi_client::models::{EnrichmentRequest as ApiEnrichmentRequest, EnrichTransactionsRequestInner};
-use serde::{Deserialize, Serialize};
+use xyo_openapi_client::models::{
+    EnrichTransactionsRequestInner, EnrichmentRequest as ApiEnrichmentRequest,
+};
 
 use crate::error::{extract_rate_limit_headers, ClientError, RateLimitError};
 
@@ -34,20 +36,24 @@ pub struct RequestOptions {
 }
 
 impl RequestOptions {
+    /// Creates a new, empty set of request options.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Sets the correlation ID for distributed tracing.
     pub fn correlation_id(mut self, correlation_id: impl Into<String>) -> Self {
         self.correlation_id = Some(correlation_id.into());
         self
     }
 
+    /// Sets the W3C traceparent header.
     pub fn traceparent(mut self, traceparent: impl Into<String>) -> Self {
         self.traceparent = Some(traceparent.into());
         self
     }
 
+    /// Sets the tenant API user ID.
     pub fn api_user(mut self, api_user: impl Into<String>) -> Self {
         self.api_user = Some(api_user.into());
         self
@@ -70,12 +76,16 @@ where
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EnrichmentResponse {
     #[serde(default, deserialize_with = "deserialize_null_as_empty_string")]
+    /// The cleaned merchant name.
     pub merchant: String,
     #[serde(default, deserialize_with = "deserialize_null_as_empty_string")]
+    /// A cleaned narrative suitable for consumer display.
     pub description: String,
     #[serde(default)]
+    /// Hierarchical categorization of the merchant.
     pub categories: Vec<String>,
     #[serde(default, deserialize_with = "deserialize_null_as_empty_string")]
+    /// High resolution logo URL.
     pub logo: String,
     /// Empty string when the API returns null / empty.
     #[serde(default, deserialize_with = "deserialize_null_as_empty_string")]
@@ -97,12 +107,16 @@ pub struct EnrichTransactionCollectionResponse {
 /// Processing state of a bulk enrichment job.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EnrichmentStatus {
+    /// The enrichment is complete and ready.
     Ready,
+    /// The enrichment is still being processed asynchronously.
     Pending,
+    /// The enrichment failed permanently.
     Failed,
 }
 
 /// A single transaction to submit for enrichment.
+/// A single transaction enrichment request containing the raw narrative and country code.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnrichmentRequest {
     /// Payment description (max 128 chars).
@@ -151,9 +165,13 @@ impl EnrichmentRequest {
 
 // ── Security Policy & Constants ───────────────────────────────────────────────
 
+/// The default maximum number of TAR entries allowed when extracting downloaded assets.
 pub const DEFAULT_MAX_TAR_ENTRIES: usize = 50_000;
+/// The default maximum byte size for a single uncompressed TAR entry.
 pub const DEFAULT_MAX_ENTRY_BYTES: u64 = 10 * 1024 * 1024; // 10 MiB
+/// The default maximum total byte size for a decompressed archive.
 pub const DEFAULT_MAX_ARCHIVE_BYTES: usize = 100 * 1024 * 1024; // 100 MiB
+/// The default user agent sent with all HTTP requests.
 pub const DEFAULT_USER_AGENT: &str = "xyo-sdk-rust/2.1.0";
 
 /// Security policy governing permitted hosts for archive downloads.
@@ -181,7 +199,10 @@ impl DownloadSecurityPolicy {
     /// Checks whether `target_host` is permitted under this policy.
     pub fn is_allowed(&self, target_host: &str, api_host: &str) -> bool {
         let target_lower = target_host.to_ascii_lowercase();
-        if self.allow_same_origin && !api_host.is_empty() && target_lower.eq_ignore_ascii_case(api_host) {
+        if self.allow_same_origin
+            && !api_host.is_empty()
+            && target_lower.eq_ignore_ascii_case(api_host)
+        {
             return true;
         }
         for allowed in &self.allowed_hosts {
@@ -215,6 +236,7 @@ fn validate_header_value(val: Option<&str>) -> Result<(), ClientError> {
     Ok(())
 }
 
+/// The maximum byte size of an error response body that will be read into memory.
 pub const MAX_ERROR_BODY_BYTES: usize = 64 * 1024; // 64 KiB
 
 async fn read_bounded_error_body(mut resp: reqwest::Response) -> String {
@@ -239,6 +261,7 @@ type TokenSupplier = std::sync::Arc<dyn Fn() -> String + Send + Sync>;
 // ── ClientBuilder ─────────────────────────────────────────────────────────────
 
 /// Builder for creating and customizing an async [`Client`].
+/// A builder to configure and construct a [`Client`].
 pub struct ClientBuilder {
     bearer_token: Option<String>,
     token_supplier: Option<TokenSupplier>,
@@ -260,6 +283,7 @@ impl Default for ClientBuilder {
 
 impl ClientBuilder {
     /// Create a new builder with default configuration.
+    /// Creates a new, empty set of request options.
     pub fn new() -> Self {
         Self {
             bearer_token: None,
@@ -333,12 +357,14 @@ impl ClientBuilder {
     }
 
     /// Set default distributed tracing correlation ID (`X-Correlation-ID` header).
+    /// Sets the correlation ID for distributed tracing.
     pub fn correlation_id(mut self, correlation_id: impl Into<String>) -> Self {
         self.correlation_id = Some(correlation_id.into());
         self
     }
 
     /// Set default distributed tracing traceparent header (`traceparent` header, W3C format).
+    /// Sets the W3C traceparent header.
     pub fn traceparent(mut self, traceparent: impl Into<String>) -> Self {
         self.traceparent = Some(traceparent.into());
         self
@@ -356,7 +382,9 @@ impl ClientBuilder {
             if let Some(cto) = self.connect_timeout {
                 builder = builder.connect_timeout(cto);
             }
-            builder.build().map_err(|e| ClientError::new(0, format!("Failed to build HTTP client: {}", e)))?
+            builder
+                .build()
+                .map_err(|e| ClientError::new(0, format!("Failed to build HTTP client: {}", e)))?
         };
 
         let mut configuration = Configuration::new();
@@ -376,7 +404,10 @@ impl ClientBuilder {
         if scheme != "http" && scheme != "https" {
             return Err(ClientError::new(
                 0,
-                format!("Unsupported base URL scheme {:?} (only http and https are permitted)", scheme),
+                format!(
+                    "Unsupported base URL scheme {:?} (only http and https are permitted)",
+                    scheme
+                ),
             ));
         }
 
@@ -411,6 +442,9 @@ impl std::fmt::Debug for ClientBuilder {
 
 /// Async client for the XYO Financial Transaction Enrichment API.
 #[derive(Clone)]
+/// The main entry point for the XYO Financial API client.
+///
+/// Thread-safe and designed to be reused across requests.
 pub struct Client {
     configuration: Configuration,
     token_supplier: Option<TokenSupplier>,
@@ -440,7 +474,10 @@ impl Client {
     ///
     /// * `bearer_token` – the API Bearer token.
     /// * `base_url`     – override the server URL (default: XYO_API_BASE_URL env or `https://api.xyo.financial`).
-    pub fn new(bearer_token: impl Into<String>, base_url: Option<String>) -> Result<Self, ClientError> {
+    pub fn new(
+        bearer_token: impl Into<String>,
+        base_url: Option<String>,
+    ) -> Result<Self, ClientError> {
         let mut builder = Client::builder().token(bearer_token);
         if let Some(url) = base_url {
             builder = builder.base_url(url);
@@ -449,7 +486,10 @@ impl Client {
     }
 
     /// Construct a new client with dynamic token rotation supplier.
-    pub fn with_token_supplier<F>(supplier: F, base_url: Option<String>) -> Result<Self, ClientError>
+    pub fn with_token_supplier<F>(
+        supplier: F,
+        base_url: Option<String>,
+    ) -> Result<Self, ClientError>
     where
         F: Fn() -> String + Send + Sync + 'static,
     {
@@ -471,12 +511,14 @@ impl Client {
     // ── enrichTransaction ─────────────────────────────────────────────────────
 
     /// Enrich a single financial transaction synchronously.
+    /// Enrich a single financial transaction synchronously without extra options.
     pub async fn enrich_transaction(
         &self,
         content: impl Into<String>,
         country_code: impl Into<String>,
     ) -> Result<EnrichmentResponse, ClientError> {
-        self.enrich_transaction_with_options(content, country_code, None).await
+        self.enrich_transaction_with_options(content, country_code, None)
+            .await
     }
 
     /// Enrich a single financial transaction synchronously with per-request options (distributed tracing, tenant user ID).
@@ -532,16 +574,20 @@ impl Client {
         }
         req_builder = req_builder.json(&body);
 
-        let resp = req_builder.send().await.map_err(|e| ClientError::new(
-            e.status().map(|s| s.as_u16()).unwrap_or(0),
-            e.to_string(),
-        ))?;
+        let resp = req_builder.send().await.map_err(|e| {
+            ClientError::new(e.status().map(|s| s.as_u16()).unwrap_or(0), e.to_string())
+        })?;
 
         let status = resp.status();
         if status.is_client_error() || status.is_server_error() {
             let code = status.as_u16();
-            let rate_limit = extract_rate_limit_headers(resp.headers())
-                .or_else(|| if code == 429 { Some(RateLimitError::default()) } else { None });
+            let rate_limit = extract_rate_limit_headers(resp.headers()).or_else(|| {
+                if code == 429 {
+                    Some(RateLimitError::default())
+                } else {
+                    None
+                }
+            });
             let message = read_bounded_error_body(resp).await;
             return Err(ClientError {
                 code,
@@ -550,7 +596,9 @@ impl Client {
             });
         }
 
-        resp.json::<EnrichmentResponse>().await.map_err(|e| ClientError::new(0, e.to_string()))
+        resp.json::<EnrichmentResponse>()
+            .await
+            .map_err(|e| ClientError::new(0, e.to_string()))
     }
 
     // ── enrichTransactions ────────────────────────────────────────────────────
@@ -558,6 +606,7 @@ impl Client {
     /// Enrich a collection of financial transactions asynchronously.
     ///
     /// Returns a job `id` that can be polled with [`Client::get_enrichment_status`].
+    /// Enrich a collection of financial transactions asynchronously.
     pub async fn enrich_transactions(
         &self,
         requests: impl IntoIterator<Item = EnrichmentRequest>,
@@ -567,7 +616,8 @@ impl Client {
         if let Some(user) = api_user {
             opts = opts.api_user(user);
         }
-        self.enrich_transactions_with_options(requests, Some(&opts)).await
+        self.enrich_transactions_with_options(requests, Some(&opts))
+            .await
     }
 
     /// Enrich a collection of financial transactions asynchronously with per-request options.
@@ -604,10 +654,12 @@ impl Client {
                     ),
                 ));
             }
-            req.validate().map_err(|e| ClientError::new(
-                0,
-                format!("request at index {} is invalid: {}", i, e.message),
-            ))?;
+            req.validate().map_err(|e| {
+                ClientError::new(
+                    0,
+                    format!("request at index {} is invalid: {}", i, e.message),
+                )
+            })?;
             items.push(EnrichTransactionsRequestInner {
                 content: req.content,
                 country_code: req.country_code,
@@ -642,16 +694,20 @@ impl Client {
         }
         req_builder = req_builder.json(&items);
 
-        let resp = req_builder.send().await.map_err(|e| ClientError::new(
-            e.status().map(|s| s.as_u16()).unwrap_or(0),
-            e.to_string(),
-        ))?;
+        let resp = req_builder.send().await.map_err(|e| {
+            ClientError::new(e.status().map(|s| s.as_u16()).unwrap_or(0), e.to_string())
+        })?;
 
         let status = resp.status();
         if status.is_client_error() || status.is_server_error() {
             let code = status.as_u16();
-            let rate_limit = extract_rate_limit_headers(resp.headers())
-                .or_else(|| if code == 429 { Some(RateLimitError::default()) } else { None });
+            let rate_limit = extract_rate_limit_headers(resp.headers()).or_else(|| {
+                if code == 429 {
+                    Some(RateLimitError::default())
+                } else {
+                    None
+                }
+            });
             let message = read_bounded_error_body(resp).await;
             return Err(ClientError {
                 code,
@@ -660,7 +716,10 @@ impl Client {
             });
         }
 
-        let resp_obj: xyo_openapi_client::models::EnrichTransactionCollectionResponse = resp.json().await.map_err(|e| ClientError::new(0, e.to_string()))?;
+        let resp_obj: xyo_openapi_client::models::EnrichTransactionCollectionResponse = resp
+            .json()
+            .await
+            .map_err(|e| ClientError::new(0, e.to_string()))?;
 
         Ok(EnrichTransactionCollectionResponse {
             id: resp_obj.id,
@@ -680,7 +739,8 @@ impl Client {
         if let Some(user) = api_user {
             opts = opts.api_user(user);
         }
-        self.get_enrichment_status_with_options(id, Some(&opts)).await
+        self.get_enrichment_status_with_options(id, Some(&opts))
+            .await
     }
 
     /// Get the status of an asynchronous bulk enrichment job with per-request options.
@@ -706,7 +766,11 @@ impl Client {
 
         let config = self.get_effective_config();
 
-        let uri_str = format!("{}/v1/ai/finance/enrichment/status/{}", config.base_path, xyo_openapi_client::apis::urlencode(id));
+        let uri_str = format!(
+            "{}/v1/ai/finance/enrichment/status/{}",
+            config.base_path,
+            xyo_openapi_client::apis::urlencode(id)
+        );
         let mut req_builder = config.client.request(reqwest::Method::GET, &uri_str);
 
         if let Some(ref user_agent) = config.user_agent {
@@ -725,16 +789,20 @@ impl Client {
             req_builder = req_builder.bearer_auth(token);
         }
 
-        let resp = req_builder.send().await.map_err(|e| ClientError::new(
-            e.status().map(|s| s.as_u16()).unwrap_or(0),
-            e.to_string(),
-        ))?;
+        let resp = req_builder.send().await.map_err(|e| {
+            ClientError::new(e.status().map(|s| s.as_u16()).unwrap_or(0), e.to_string())
+        })?;
 
         let status = resp.status();
         if status.is_client_error() || status.is_server_error() {
             let code = status.as_u16();
-            let rate_limit = extract_rate_limit_headers(resp.headers())
-                .or_else(|| if code == 429 { Some(RateLimitError::default()) } else { None });
+            let rate_limit = extract_rate_limit_headers(resp.headers()).or_else(|| {
+                if code == 429 {
+                    Some(RateLimitError::default())
+                } else {
+                    None
+                }
+            });
             let message = read_bounded_error_body(resp).await;
             return Err(ClientError {
                 code,
@@ -743,7 +811,10 @@ impl Client {
             });
         }
 
-        let resp_obj: xyo_openapi_client::models::EnrichmentCollectionStatusResponse = resp.json().await.map_err(|e| ClientError::new(0, e.to_string()))?;
+        let resp_obj: xyo_openapi_client::models::EnrichmentCollectionStatusResponse = resp
+            .json()
+            .await
+            .map_err(|e| ClientError::new(0, e.to_string()))?;
 
         use xyo_openapi_client::models::enrichment_collection_status_response::Status;
         Ok(match resp_obj.status {
@@ -772,33 +843,39 @@ impl Client {
         let parsed_download_url = if let Ok(parsed) = url::Url::parse(trimmed_url) {
             if parsed.scheme() == "http" || parsed.scheme() == "https" {
                 parsed
-            } else if !parsed.scheme().is_empty() && (trimmed_url.contains("://") || trimmed_url.starts_with("javascript:") || trimmed_url.starts_with("data:")) {
+            } else if !parsed.scheme().is_empty()
+                && (trimmed_url.contains("://")
+                    || trimmed_url.starts_with("javascript:")
+                    || trimmed_url.starts_with("data:"))
+            {
                 return Err(ClientError::new(
                     0,
-                    format!("Unsupported URL scheme {:?} (only http and https are permitted)", parsed.scheme()),
+                    format!(
+                        "Unsupported URL scheme {:?} (only http and https are permitted)",
+                        parsed.scheme()
+                    ),
                 ));
             } else {
                 let base_clean = self.configuration.base_path.trim_end_matches('/');
                 let rel_clean = trimmed_url.trim_start_matches('/');
-                url::Url::parse(&format!("{}/{}", base_clean, rel_clean)).map_err(|e| ClientError::new(
-                    0,
-                    format!("Invalid download URL: {}", e),
-                ))?
+                url::Url::parse(&format!("{}/{}", base_clean, rel_clean))
+                    .map_err(|e| ClientError::new(0, format!("Invalid download URL: {}", e)))?
             }
         } else {
             let base_clean = self.configuration.base_path.trim_end_matches('/');
             let rel_clean = trimmed_url.trim_start_matches('/');
-            url::Url::parse(&format!("{}/{}", base_clean, rel_clean)).map_err(|e| ClientError::new(
-                0,
-                format!("Invalid download URL: {}", e),
-            ))?
+            url::Url::parse(&format!("{}/{}", base_clean, rel_clean))
+                .map_err(|e| ClientError::new(0, format!("Invalid download URL: {}", e)))?
         };
 
         let scheme = parsed_download_url.scheme();
         if scheme != "http" && scheme != "https" {
             return Err(ClientError::new(
                 0,
-                format!("Unsupported URL scheme {:?} (only http and https are permitted)", scheme),
+                format!(
+                    "Unsupported URL scheme {:?} (only http and https are permitted)",
+                    scheme
+                ),
             ));
         }
 
@@ -820,7 +897,10 @@ impl Client {
         if !self.download_policy.is_allowed(down_host, api_host) {
             return Err(ClientError::new(
                 0,
-                format!("domain {:?} is not permitted for secure archive downloads", down_host),
+                format!(
+                    "domain {:?} is not permitted for secure archive downloads",
+                    down_host
+                ),
             ));
         }
 
@@ -850,16 +930,20 @@ impl Client {
             "application/gzip, application/x-tar, application/octet-stream;q=0.9, */*;q=0.8",
         );
 
-        let resp = req_builder.send().await.map_err(|e| ClientError::new(
-            e.status().map(|s| s.as_u16()).unwrap_or(0),
-            e.to_string(),
-        ))?;
+        let resp = req_builder.send().await.map_err(|e| {
+            ClientError::new(e.status().map(|s| s.as_u16()).unwrap_or(0), e.to_string())
+        })?;
 
         let status = resp.status();
         if status.is_client_error() || status.is_server_error() {
             let code = status.as_u16();
-            let rate_limit = extract_rate_limit_headers(resp.headers())
-                .or_else(|| if code == 429 { Some(RateLimitError::default()) } else { None });
+            let rate_limit = extract_rate_limit_headers(resp.headers()).or_else(|| {
+                if code == 429 {
+                    Some(RateLimitError::default())
+                } else {
+                    None
+                }
+            });
             let message = read_bounded_error_body(resp).await;
             return Err(ClientError {
                 code,
@@ -914,10 +998,12 @@ impl Client {
         let mut buffer = Vec::with_capacity(initial_capacity);
 
         let mut resp = resp;
-        while let Some(chunk) = resp.chunk().await.map_err(|e| ClientError::new(
-            e.status().map(|s| s.as_u16()).unwrap_or(0),
-            format!("Network stream error: {}", e),
-        ))? {
+        while let Some(chunk) = resp.chunk().await.map_err(|e| {
+            ClientError::new(
+                e.status().map(|s| s.as_u16()).unwrap_or(0),
+                format!("Network stream error: {}", e),
+            )
+        })? {
             if buffer.len() + chunk.len() > DEFAULT_MAX_ARCHIVE_BYTES {
                 return Err(ClientError::new(
                     0,
@@ -931,76 +1017,96 @@ impl Client {
         }
 
         // Offload synchronous CPU-intensive gzip decompression, tar unpacking, and JSON deserialization to blocking threadpool
-        let results = tokio::task::spawn_blocking(move || -> Result<Vec<EnrichmentResponse>, ClientError> {
-            let gz_decoder = flate2::read::GzDecoder::new(std::io::Cursor::new(buffer));
-            let mut archive = tar::Archive::new(gz_decoder);
+        let results =
+            tokio::task::spawn_blocking(move || -> Result<Vec<EnrichmentResponse>, ClientError> {
+                let gz_decoder = flate2::read::GzDecoder::new(std::io::Cursor::new(buffer));
+                let mut archive = tar::Archive::new(gz_decoder);
 
-            let entries = archive.entries().map_err(|e| ClientError::new(
-                0,
-                format!("Failed to read tar archive: {}", e),
-            ))?;
+                let entries = archive.entries().map_err(|e| {
+                    ClientError::new(0, format!("Failed to read tar archive: {}", e))
+                })?;
 
-            let mut results = Vec::new();
-            let mut entry_count: usize = 0;
+                let mut results = Vec::new();
+                let mut entry_count: usize = 0;
 
-            for entry_res in entries {
-                entry_count += 1;
-                if entry_count > DEFAULT_MAX_TAR_ENTRIES {
-                    return Err(ClientError::new(
-                        0,
-                        format!("Archive contains too many entries (exceeded limit of {})", DEFAULT_MAX_TAR_ENTRIES),
-                    ));
-                }
+                for entry_res in entries {
+                    entry_count += 1;
+                    if entry_count > DEFAULT_MAX_TAR_ENTRIES {
+                        return Err(ClientError::new(
+                            0,
+                            format!(
+                                "Archive contains too many entries (exceeded limit of {})",
+                                DEFAULT_MAX_TAR_ENTRIES
+                            ),
+                        ));
+                    }
 
-                let mut entry = entry_res.map_err(|e| ClientError::new(
-                    0,
-                    format!("Failed to read tar entry: {}", e),
-                ))?;
+                    let mut entry = entry_res.map_err(|e| {
+                        ClientError::new(0, format!("Failed to read tar entry: {}", e))
+                    })?;
 
-                let entry_size = entry.header().size().unwrap_or(0);
-                if entry_size > DEFAULT_MAX_ENTRY_BYTES {
-                    let name = entry.path().map(|p| p.display().to_string()).unwrap_or_default();
-                    return Err(ClientError::new(
-                        0,
-                        format!("Entry {:?} size ({} bytes) exceeds limit of {} bytes", sanitize_entry_name(&name), entry_size, DEFAULT_MAX_ENTRY_BYTES),
-                    ));
-                }
+                    let entry_size = entry.header().size().unwrap_or(0);
+                    if entry_size > DEFAULT_MAX_ENTRY_BYTES {
+                        let name = entry
+                            .path()
+                            .map(|p| p.display().to_string())
+                            .unwrap_or_default();
+                        return Err(ClientError::new(
+                            0,
+                            format!(
+                                "Entry {:?} size ({} bytes) exceeds limit of {} bytes",
+                                sanitize_entry_name(&name),
+                                entry_size,
+                                DEFAULT_MAX_ENTRY_BYTES
+                            ),
+                        ));
+                    }
 
-                let is_file = entry.header().entry_type().is_file();
-                let path_buf = entry
-                    .path()
-                    .map_err(|e| ClientError::new(
-                        0,
-                        format!("Failed to read tar entry path: {}", e),
-                    ))?
-                    .into_owned();
+                    let is_file = entry.header().entry_type().is_file();
+                    let path_buf = entry
+                        .path()
+                        .map_err(|e| {
+                            ClientError::new(0, format!("Failed to read tar entry path: {}", e))
+                        })?
+                        .into_owned();
 
-                // Zip-Slip and path traversal protection
-                let path_str = path_buf.to_string_lossy();
-                if path_str.contains("..") || path_str.starts_with('/') || path_str.starts_with('\\') {
-                    continue;
-                }
+                    // Zip-Slip and path traversal protection
+                    let path_str = path_buf.to_string_lossy();
+                    if path_str.contains("..")
+                        || path_str.starts_with('/')
+                        || path_str.starts_with('\\')
+                    {
+                        continue;
+                    }
 
-                if is_file {
-                    if let Some(ext) = path_buf.extension() {
-                        if ext == "json" {
-                            let item: EnrichmentResponse = serde_json::from_reader(&mut entry).map_err(|e| ClientError::new(
-                                0,
-                                format!("Failed to parse JSON from {}: {}", sanitize_entry_name(&path_buf.display().to_string()), e),
-                            ))?;
-                            results.push(item);
+                    if is_file {
+                        if let Some(ext) = path_buf.extension() {
+                            if ext == "json" {
+                                let item: EnrichmentResponse = serde_json::from_reader(&mut entry)
+                                    .map_err(|e| {
+                                        ClientError::new(
+                                            0,
+                                            format!(
+                                                "Failed to parse JSON from {}: {}",
+                                                sanitize_entry_name(
+                                                    &path_buf.display().to_string()
+                                                ),
+                                                e
+                                            ),
+                                        )
+                                    })?;
+                                results.push(item);
+                            }
                         }
                     }
                 }
-            }
 
-            Ok(results)
-        })
-        .await
-        .map_err(|join_err| ClientError::new(
-            0,
-            format!("Decompression task failed: {}", join_err),
-        ))??;
+                Ok(results)
+            })
+            .await
+            .map_err(|join_err| {
+                ClientError::new(0, format!("Decompression task failed: {}", join_err))
+            })??;
 
         Ok(results)
     }
@@ -1013,17 +1119,20 @@ fn map_error<T: std::fmt::Debug>(err: xyo_openapi_client::apis::Error<T>) -> Cli
     match err {
         xyo_openapi_client::apis::Error::ResponseError(rc) => {
             let code = rc.status.as_u16();
-            let rate_limit = if code == 429 { Some(RateLimitError::default()) } else { None };
+            let rate_limit = if code == 429 {
+                Some(RateLimitError::default())
+            } else {
+                None
+            };
             ClientError {
                 code,
                 message: rc.content,
                 rate_limit,
             }
         }
-        xyo_openapi_client::apis::Error::Reqwest(e) => ClientError::new(
-            e.status().map(|s| s.as_u16()).unwrap_or(0),
-            e.to_string(),
-        ),
+        xyo_openapi_client::apis::Error::Reqwest(e) => {
+            ClientError::new(e.status().map(|s| s.as_u16()).unwrap_or(0), e.to_string())
+        }
         xyo_openapi_client::apis::Error::Serde(e) => ClientError::new(0, e.to_string()),
         xyo_openapi_client::apis::Error::Io(e) => ClientError::new(0, e.to_string()),
     }
@@ -1046,8 +1155,11 @@ mod tests {
 
     #[test]
     fn test_client_new_custom_base_url() {
-        let client = Client::new("my-token", Some("https://sandbox.api.xyo.financial".to_string()))
-            .expect("Client::new with custom URL should succeed");
+        let client = Client::new(
+            "my-token",
+            Some("https://sandbox.api.xyo.financial".to_string()),
+        )
+        .expect("Client::new with custom URL should succeed");
         assert_eq!(
             client.configuration.base_path,
             "https://sandbox.api.xyo.financial"
@@ -1088,10 +1200,21 @@ mod tests {
             .build()
             .expect("builder should succeed");
 
-        assert_eq!(client.configuration.base_path, "https://custom.api.xyo.financial");
-        assert_eq!(client.configuration.bearer_access_token, Some("custom-builder-token".to_string()));
-        assert_eq!(client.configuration.user_agent, Some("custom-app/1.0.0".to_string()));
-        assert!(client.download_policy.is_allowed("custom-cdn.internal", "custom.api.xyo.financial"));
+        assert_eq!(
+            client.configuration.base_path,
+            "https://custom.api.xyo.financial"
+        );
+        assert_eq!(
+            client.configuration.bearer_access_token,
+            Some("custom-builder-token".to_string())
+        );
+        assert_eq!(
+            client.configuration.user_agent,
+            Some("custom-app/1.0.0".to_string())
+        );
+        assert!(client
+            .download_policy
+            .is_allowed("custom-cdn.internal", "custom.api.xyo.financial"));
     }
 
     #[test]
@@ -1190,8 +1313,10 @@ mod tests {
 
     #[test]
     fn test_map_error_serde() {
-        let serde_err: serde_json::Error = serde_json::from_str::<i32>("not an integer").unwrap_err();
-        let err: xyo_openapi_client::apis::Error<()> = xyo_openapi_client::apis::Error::Serde(serde_err);
+        let serde_err: serde_json::Error =
+            serde_json::from_str::<i32>("not an integer").unwrap_err();
+        let err: xyo_openapi_client::apis::Error<()> =
+            xyo_openapi_client::apis::Error::Serde(serde_err);
 
         let client_err = map_error(err);
         assert_eq!(client_err.code, 0);
@@ -1222,7 +1347,10 @@ mod tests {
             .base_url("https://env.api.xyo.financial")
             .build()
             .expect("builder with custom base_url should succeed");
-        assert_eq!(client.configuration.base_path, "https://env.api.xyo.financial");
+        assert_eq!(
+            client.configuration.base_path,
+            "https://env.api.xyo.financial"
+        );
     }
 
     #[test]
@@ -1285,13 +1413,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_enrich_transaction_rejects_api_user() {
-        let client = Client::new("test-token", Some("https://api.xyo.financial".to_string())).unwrap();
+        let client =
+            Client::new("test-token", Some("https://api.xyo.financial".to_string())).unwrap();
         let opts = RequestOptions::new().api_user("user-123");
         let err = client
             .enrich_transaction_with_options("COSTA", "GB", Some(&opts))
             .await
             .expect_err("api_user should be rejected for single transaction");
-        assert_eq!(err.message, "`api_user` is only applicable to bulk operations");
+        assert_eq!(
+            err.message,
+            "`api_user` is only applicable to bulk operations"
+        );
     }
 
     #[test]
@@ -1331,7 +1463,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_enrich_transactions_lazy_iterator_limit() {
-        let client = Client::new("test-token", Some("https://api.xyo.financial".to_string())).unwrap();
+        let client =
+            Client::new("test-token", Some("https://api.xyo.financial".to_string())).unwrap();
 
         let infinite_requests = std::iter::repeat_with(|| EnrichmentRequest {
             content: "COSTA COFFEE".to_string(),
@@ -1343,7 +1476,9 @@ mod tests {
             .await
             .expect_err("infinite requests iterator should terminate early with error");
 
-        assert!(err.message.contains("requests batch size exceeds maximum allowed limit"));
+        assert!(err
+            .message
+            .contains("requests batch size exceeds maximum allowed limit"));
     }
 
     #[test]
