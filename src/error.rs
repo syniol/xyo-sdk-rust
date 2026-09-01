@@ -1,3 +1,5 @@
+//! Error types and utilities for the SDK.
+
 use serde::{Deserialize, Serialize};
 
 /// Detailed rate limit information extracted from HTTP 429 response headers.
@@ -14,11 +16,14 @@ pub struct RateLimitError {
     pub reset: Option<u64>,
 }
 
-/// Error type returned by the XYO SDK client.
+/// Error type returned by operations across the XYO Financial SDK.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClientError {
+    /// Human-readable error message.
     pub message: String,
+    /// HTTP status code or 0 if a client-side / local validation error.
     pub code: u16,
+    /// Rate limiting metadata if this error was caused by HTTP 429 Too Many Requests.
     pub rate_limit: Option<RateLimitError>,
 }
 
@@ -88,8 +93,14 @@ impl ClientError {
             || (self.code == 0
                 && (self.message.to_ascii_lowercase().contains("timed out")
                     || self.message.to_ascii_lowercase().contains("timeout")
-                    || self.message.to_ascii_lowercase().contains("connection reset")
-                    || self.message.to_ascii_lowercase().contains("network stream error")))
+                    || self
+                        .message
+                        .to_ascii_lowercase()
+                        .contains("connection reset")
+                    || self
+                        .message
+                        .to_ascii_lowercase()
+                        .contains("network stream error")))
     }
 }
 
@@ -146,7 +157,11 @@ pub fn extract_rate_limit_headers(headers: &reqwest::header::HeaderMap) -> Optio
 
     let retry_after = parse_retry_after_from_headers(&["retry-after", "x-retry-after"]);
     let limit = parse_u64(&["ratelimit-limit", "x-ratelimit-limit", "x-rate-limit-limit"]);
-    let remaining = parse_u64(&["ratelimit-remaining", "x-ratelimit-remaining", "x-rate-limit-remaining"]);
+    let remaining = parse_u64(&[
+        "ratelimit-remaining",
+        "x-ratelimit-remaining",
+        "x-rate-limit-remaining",
+    ]);
     let reset = parse_u64(&["ratelimit-reset", "x-ratelimit-reset", "x-rate-limit-reset"]);
 
     if retry_after.is_some() || limit.is_some() || remaining.is_some() || reset.is_some() {
@@ -160,7 +175,6 @@ pub fn extract_rate_limit_headers(headers: &reqwest::header::HeaderMap) -> Optio
         None
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -238,7 +252,10 @@ mod tests {
         let err_with_rl = ClientError::with_rate_limit(429, "Rate limit exceeded", rl);
         assert!(err_with_rl.is_rate_limited());
         assert!(err_with_rl.rate_limit.is_some());
-        assert_eq!(err_with_rl.rate_limit.as_ref().unwrap().retry_after, Some(60));
+        assert_eq!(
+            err_with_rl.rate_limit.as_ref().unwrap().retry_after,
+            Some(60)
+        );
         assert!(format!("{}", err_with_rl).contains("[rate_limit: retry_after=Some(60)"));
     }
 
@@ -248,10 +265,11 @@ mod tests {
         assert_eq!(parse_retry_after("Wed, 21 Oct 2015 07:28:00 GMT"), Some(0));
 
         let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert("Retry-After", "Wed, 21 Oct 2015 07:28:00 GMT".parse().unwrap());
+        headers.insert(
+            "Retry-After",
+            "Wed, 21 Oct 2015 07:28:00 GMT".parse().unwrap(),
+        );
         let rl = extract_rate_limit_headers(&headers).expect("should parse HTTP-date Retry-After");
         assert_eq!(rl.retry_after, Some(0));
     }
 }
-
-

@@ -18,6 +18,9 @@ COPY . /var/local/xyo-sdk/
 WORKDIR /var/local/xyo-sdk
 RUN cargo test --verbose
 
+# Verify documentation coverage (fail build on any missing rustdoc)
+RUN RUSTDOCFLAGS="-D missing_docs" cargo doc --no-deps --verbose
+
 # Running Tests for OpenAPI Workspace dependency
 WORKDIR /var/local/xyo-sdk/openapi
 RUN cargo test --verbose

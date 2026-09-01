@@ -45,6 +45,9 @@ jobs:
       - name: Run Tests
         run: cargo test --verbose
 
+      - name: Verify Documentation Guardrails
+        run: RUSTDOCFLAGS="-D missing_docs" cargo doc --no-deps --verbose
+
   publish-release:
     name: Publish Release & Artifacts
     needs: test
